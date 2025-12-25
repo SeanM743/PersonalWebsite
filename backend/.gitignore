@@ -1,0 +1,35 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.next
+pom.xml.bak
+release.properties
+release-versions.properties
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# Log files
+*.log
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Package Manager specific files
+.flattened-pom.xml
