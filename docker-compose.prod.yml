@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15
+    container_name: personal-dashboard-db
+    environment:
+      POSTGRES_DB: personal_platform
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d personal_platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - personal-dashboard
+
+  # Backend Spring Boot API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: personal-dashboard-backend
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/personal_platform
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: password
+      
+      # API Keys
+      FINNHUB_API_KEY: d56snvhr01qkvkasbedgd56snvhr01qkvkasbee0
+      GOOGLE_CLOUD_PROJECT_ID: ${GOOGLE_CLOUD_PROJECT_ID:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      GOOGLE_CALENDAR_CREDENTIALS_PATH: /app/config/google/google-calendar-credentials.json
+      
+      # CORS Configuration
+      SECURITY_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://localhost:80
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount Google Calendar credentials if available
+      - ${GOOGLE_CALENDAR_CREDENTIALS_PATH:-./config/google}:/app/config/google:ro
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - personal-dashboard
+
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: personal-dashboard-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - personal-dashboard
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  personal-dashboard:
+    driver: bridge
