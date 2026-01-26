@@ -110,6 +110,13 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
           );
         }
 
+        // Sort by startDate (earliest first)
+        filteredEntries.sort((a, b) => {
+          if (!a.startDate) return 1;
+          if (!b.startDate) return -1;
+          return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+        });
+
         setEntries(filteredEntries);
       }
     } catch (err: any) {
@@ -161,7 +168,7 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
 
   if (isLoading) {
     return (
-      <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+      <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="large" />
         </div>
@@ -170,24 +177,24 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
   }
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+    <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Life Log</h2>
-          <p className="text-sm text-gray-500 mt-1">Track books, movies, shows, music, and hobbies</p>
+          <h2 className="text-xl font-bold text-main">Life Log</h2>
+          <p className="text-sm text-muted mt-1">Track books, movies, shows, music, and hobbies</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title="Toggle filters"
           >
             <Filter className="h-5 w-5" />
           </button>
           <button
             onClick={handleAddEntry}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title="Add new entry"
           >
             <Plus className="h-5 w-5" />
@@ -197,17 +204,17 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
 
       {/* Filters */}
       {showFilters && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-4 bg-page rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
               <input
                 type="text"
                 placeholder="Search entries..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted"
               />
             </div>
 
@@ -216,7 +223,7 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
               <select
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value as LifeLogType | 'ALL')}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                className="w-full px-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
               >
                 <option value="ALL">All Types</option>
                 {Object.values(LifeLogType).map(type => (
@@ -231,7 +238,7 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
               <select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value as EntryStatus | 'ALL')}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
+                className="w-full px-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
               >
                 <option value="ALL">All Statuses</option>
                 {Object.values(EntryStatus).map(status => (
@@ -258,10 +265,10 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
         </div>
       ) : (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Book className="h-8 w-8 text-gray-400" />
+          <div className="w-16 h-16 bg-page rounded-full flex items-center justify-center mx-auto mb-4">
+            <Book className="h-8 w-8 text-muted" />
           </div>
-          <p className="text-gray-500 mb-2">
+          <p className="text-muted mb-2">
             {searchQuery || selectedType !== 'ALL' || selectedStatus !== 'ALL'
               ? 'No entries match your filters.'
               : 'No Life Log entries yet.'
@@ -278,8 +285,8 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
 
       {/* Entry Count */}
       {entries.length > 0 && (
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <p className="text-sm text-gray-500 text-center">
+        <div className="mt-6 pt-4 border-t border-border">
+          <p className="text-sm text-muted text-center">
             Showing {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
           </p>
         </div>

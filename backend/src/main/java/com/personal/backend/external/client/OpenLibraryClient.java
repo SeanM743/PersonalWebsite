@@ -60,7 +60,16 @@ public class OpenLibraryClient {
                 return Optional.of(book);
 
             } else {
-                // If specific title search fails, try generic query search which is more forgiving
+                // If specific title search fails, check if we have a subtitle (colon)
+                if (title.contains(":")) {
+                    String mainTitle = title.substring(0, title.indexOf(":")).trim();
+                    if (!mainTitle.isEmpty()) {
+                        log.info("No book found for exact title: '{}'. Trying main title: '{}'", title, mainTitle);
+                        return searchByTitle(mainTitle);
+                    }
+                }
+
+                // Fallback to generic query search which is more forgiving
                 log.info("No book found for exact title: {}, trying generic search", title);
                 return searchByGeneralQuery(title);
             }

@@ -6,15 +6,16 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import NowSection from '../components/NowSection';
 import LifeLogView from '../components/LifeLogView';
 import Timeline from '../components/Timeline';
-import DigitalGardenView from '../components/DigitalGardenView';
 
 import {
   Heart,
   MessageCircle,
   Share,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Plus
 } from 'lucide-react';
+import NewUpdateModal from '../components/NewUpdateModal';
 
 interface Post {
   id: number;
@@ -62,6 +63,7 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [isNewUpdateModalOpen, setIsNewUpdateModalOpen] = useState(false);
   const { error } = useNotification();
 
   const loadDashboardData = async () => {
@@ -111,7 +113,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+    <div className="max-w-7xl mx-auto p-6 bg-page min-h-screen transition-colors duration-300">
       {/* Digital Command Center - Bento Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 auto-rows-min">
 
@@ -131,32 +133,38 @@ const Dashboard: React.FC = () => {
 
         {/* Timeline Section (spans full width on small screens, 3 columns on large screens) */}
         <ErrorBoundary>
-          <Timeline className="md:col-span-2 lg:col-span-4 xl:col-span-3" />
+          <Timeline className="md:col-span-2 lg:col-span-4 xl:col-span-6" />
         </ErrorBoundary>
 
-        {/* Digital Garden Section (spans 2 columns) */}
-        <ErrorBoundary>
-          <DigitalGardenView className="md:col-span-2 lg:col-span-2 xl:col-span-3" />
-        </ErrorBoundary>
+
 
 
 
         {/* Legacy Posts Section (spans full width, moved to bottom) */}
-        <div className="md:col-span-2 lg:col-span-4 xl:col-span-6 bg-white rounded-xl shadow-sm p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Recent Updates</h2>
+        <div className="md:col-span-2 lg:col-span-4 xl:col-span-6 bg-card rounded-xl shadow-sm p-6 border border-border">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-main">Recent Updates</h2>
+            <button
+              onClick={() => setIsNewUpdateModalOpen(true)}
+              className="flex items-center space-x-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Update</span>
+            </button>
+          </div>
 
           {posts.length > 0 ? (
             <div className="space-y-6">
               {posts.map((post) => (
-                <div key={post.id} className="border-b border-gray-100 pb-6 last:border-b-0">
+                <div key={post.id} className="border-b border-border pb-6 last:border-b-0">
                   {/* Post Header */}
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
                       {post.platform ? post.platform.charAt(0).toUpperCase() : 'P'}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900">{post.platform || 'Personal'}</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="font-medium text-main">{post.platform || 'Personal'}</div>
+                      <div className="text-sm text-muted">
                         {new Date(post.createdAt).toLocaleDateString()}
                       </div>
                     </div>
@@ -164,14 +172,14 @@ const Dashboard: React.FC = () => {
 
                   {/* Post Content */}
                   <div className="mb-2">
-                    <h3 className="font-medium text-gray-900 mb-2">{post.title}</h3>
-                    <div className="text-gray-700 leading-relaxed">
+                    <h3 className="font-medium text-main mb-2">{post.title}</h3>
+                    <div className="text-main/80 leading-relaxed">
                       {post.content}
                     </div>
                   </div>
 
                   {/* Post Actions */}
-                  <div className="flex items-center space-x-6 text-gray-500">
+                  <div className="flex items-center space-x-6 text-muted">
                     <button className="flex items-center space-x-2 hover:text-red-500 transition-colors">
                       <Heart className="h-4 w-4" />
                       <span className="text-sm">Like</span>
@@ -191,31 +199,31 @@ const Dashboard: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted">
               No posts available. Create your first post to get started!
             </div>
           )}
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-100">
+            <div className="flex items-center justify-between mt-6 pt-6 border-t border-border">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="flex items-center space-x-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                className="flex items-center space-x-2 text-muted hover:text-main disabled:opacity-50"
               >
                 <ChevronLeft className="h-4 w-4" />
                 <span>Previous</span>
               </button>
 
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="flex items-center space-x-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                className="flex items-center space-x-2 text-muted hover:text-main disabled:opacity-50"
               >
                 <span>Next</span>
                 <ChevronRight className="h-4 w-4" />
@@ -224,6 +232,16 @@ const Dashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* New Update Modal */}
+      <NewUpdateModal
+        isOpen={isNewUpdateModalOpen}
+        onClose={() => setIsNewUpdateModalOpen(false)}
+        onSave={() => {
+          setCurrentPage(1); // Reset to first page
+          loadDashboardData(); // Reload data
+        }}
+      />
     </div>
   );
 };

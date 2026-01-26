@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.personal.backend.dto.MarketData;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -26,6 +27,7 @@ public class StockHoldingService {
     
     private final StockTickerRepository stockRepository;
     private final FinancialValidator financialValidator;
+    private final FinnhubClient finnhubClient;
     
     @Value("${portfolio.max.positions.per.user:100}")
     private int maxPositionsPerUser;
@@ -216,6 +218,9 @@ public class StockHoldingService {
             }
             
             List<StockTicker> holdings = stockRepository.findByUserIdOrderBySymbolAsc(userId);
+
+            // Update prices if stale
+            holdings.forEach(this::updatePriceIfStale);
             
             // Calculate portfolio statistics
             BigDecimal totalInvestment = holdings.stream()
@@ -451,6 +456,55 @@ public class StockHoldingService {
         } catch (Exception e) {
             log.error("Error in bulk update for user {}: {}", userId, e.getMessage(), e);
             return PortfolioResponse.error("Bulk update failed: " + e.getMessage());
+        }
+    }
+
+
+    private void updatePriceIfStale(StockTicker ticker) {
+        // Price is stale if null or older than 15 minutes
+        boolean isStale = ticker.getCurrentPrice() == null || 
+                          ticker.getLastPriceUpdate() == null || 
+                          ticker.getLastPriceUpdate().isBefore(LocalDateTime.now().minusMinutes(15));
+
+        if (isStale) {
+            int maxRetries = 3;
+            long backoffMs = 500; // Start with 500ms
+            
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    MarketData marketData = finnhubClient.getStockQuote(ticker.getSymbol()).block();
+                    if (marketData != null && marketData.getCurrentPrice() != null && 
+                        marketData.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
+                        ticker.setCurrentPrice(marketData.getCurrentPrice());
+                        ticker.setDailyChange(marketData.getDailyChange());
+                        ticker.setDailyChangePercentage(marketData.getDailyChangePercentage());
+                        ticker.setLastPriceUpdate(LocalDateTime.now());
+                        ticker.setIsMarketOpen(marketData.getIsMarketOpen());
+                        stockRepository.save(ticker);
+                        log.debug("Updated price for {} on attempt {}: ${}", 
+                                 ticker.getSymbol(), attempt, marketData.getCurrentPrice());
+                        return; // Success!
+                    } else {
+                        log.warn("Received null or invalid price for {} on attempt {}/{}", 
+                                ticker.getSymbol(), attempt, maxRetries);
+                    }
+                } catch (Exception e) {
+                    if (attempt < maxRetries) {
+                        log.warn("Failed to fetch price for {} (attempt {}/{}): {}. Retrying in {}ms...", 
+                                ticker.getSymbol(), attempt, maxRetries, e.getMessage(), backoffMs * attempt);
+                        try {
+                            Thread.sleep(backoffMs * attempt); // Exponential backoff: 500ms, 1000ms, 1500ms
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            log.error("Interrupted while waiting to retry price fetch for {}", ticker.getSymbol());
+                            break;
+                        }
+                    } else {
+                        log.error("Failed to fetch price for {} after {} attempts: {}", 
+                                 ticker.getSymbol(), maxRetries, e.getMessage());
+                    }
+                }
+            }
         }
     }
 }

@@ -3,12 +3,66 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Light Theme (Default) */
+    --bg-page: 249 250 251;
+    /* #f9fafb (gray-50) */
+    --bg-card: 255 255 255;
+    /* #ffffff */
+    --text-main: 17 24 39;
+    /* #111827 (gray-900) */
+    --text-muted: 107 114 128;
+    /* #6b7280 (gray-500) */
+    --border-color: 229 231 235;
+    /* #e5e7eb (gray-200) */
+    --primary: 37 99 235;
+    /* #2563eb (blue-600) */
+    --secondary: 75 85 99;
+    /* #4b5563 (gray-600) */
+  }
+
+  [data-theme='dark'] {
+    /* Dark Theme */
+    --bg-page: 17 24 39;
+    /* #111827 (gray-900) */
+    --bg-card: 31 41 55;
+    /* #1f2937 (gray-800) */
+    --text-main: 249 250 251;
+    /* #f9fafb (gray-50) */
+    --text-muted: 156 163 175;
+    /* #9ca3af (gray-400) */
+    --border-color: 55 65 81;
+    /* #374151 (gray-700) */
+    --primary: 59 130 246;
+    /* #3b82f6 (blue-500) */
+    --secondary: 156 163 175;
+    /* #9ca3af (gray-400) */
+  }
+
+  [data-theme='bears'] {
+    /* Bears Theme (Navy & Orange) */
+    --bg-page: 11 22 42;
+    /* #0B162A (Chicago Bears Navy) */
+    --bg-card: 21 38 66;
+    /* #152642 Adjusted Lighter Navy */
+    --text-main: 255 255 255;
+    /* #FFFFFF */
+    --text-muted: 203 213 225;
+    /* #cbd5e1 (slate-300) */
+    --border-color: 200 56 3;
+    /* #C83803 (Chicago Bears Orange) */
+    --primary: 200 56 3;
+    /* #C83803 (Orange) */
+    --secondary: 201 206 214;
+    /* #c9ced6 */
+  }
+
   html {
     font-family: 'Inter', system-ui, sans-serif;
   }
-  
+
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-page text-main transition-colors duration-300;
   }
 }
 
@@ -16,29 +70,29 @@
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
-  
+
   .btn-secondary {
     @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
-  
+
   .btn-danger {
     @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
-  
+
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply bg-card rounded-lg shadow-sm border border-border p-6;
   }
-  
+
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full px-3 py-2 bg-page border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
   }
-  
+
   .sidebar-item {
-    @apply flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 hover:text-gray-900 rounded-lg transition-colors duration-200;
+    @apply flex items-center px-4 py-2 text-muted hover:bg-page hover:text-main rounded-lg transition-colors duration-200;
   }
-  
+
   .sidebar-item.active {
-    @apply bg-blue-50 text-blue-700 border-r-2 border-blue-700;
+    @apply bg-primary/10 text-primary border-r-2 border-primary;
   }
 }
 
@@ -66,6 +120,7 @@
     opacity: 0;
     transform: translateX(100%);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);

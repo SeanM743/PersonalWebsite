@@ -21,6 +21,7 @@ services:
       - '--web.enable-admin-api'
     networks:
       - monitoring
+      - default
     depends_on:
       - alertmanager
     healthcheck:

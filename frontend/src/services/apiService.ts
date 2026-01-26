@@ -107,6 +107,74 @@ class ApiService {
     return response.data;
   }
 
+  async getTransactions() {
+    const response = await this.api.get('/portfolio/transactions');
+    return response.data;
+  }
+
+  async addTransaction(transaction: any) {
+    const response = await this.api.post('/portfolio/transactions', transaction);
+    return response.data;
+  }
+
+  // Account API
+  async getAccounts() {
+    const response = await this.api.get('/accounts');
+    return response.data;
+  }
+
+  async getAccount(id: number) {
+    const response = await this.api.get(`/accounts/${id}`);
+    return response.data;
+  }
+
+  async createAccount(account: any) {
+    const response = await this.api.post('/accounts', account);
+    return response.data;
+  }
+
+  async deleteAccount(id: number) {
+    const response = await this.api.delete(`/accounts/${id}`);
+    return response.data;
+  }
+
+  async updateAccountBalance(id: number, balance: number) {
+    const response = await this.api.put(`/accounts/${id}/balance`, { balance });
+    return response.data;
+  }
+
+  // Watchlist API
+  async getWatchlist() {
+    const response = await this.api.get('/watchlist');
+    return response.data;
+  }
+
+  async addToWatchlist(symbol: string) {
+    const response = await this.api.post('/watchlist', { symbol });
+    return response.data;
+  }
+
+  async removeFromWatchlist(id: number) {
+    const response = await this.api.delete(`/watchlist/${id}`);
+    return response.data;
+  }
+
+  // Paper Trading API
+  async getPaperTransactions() {
+    const response = await this.api.get('/paper-trading');
+    return response.data;
+  }
+
+  async addPaperTransaction(txn: any) {
+    const response = await this.api.post('/paper-trading', txn);
+    return response.data;
+  }
+
+  async resetPaperPortfolio() {
+    const response = await this.api.delete('/paper-trading/reset');
+    return response.data;
+  }
+
   // Calendar API
   async getCalendarEvents(startDate?: string, endDate?: string) {
     const params = new URLSearchParams();

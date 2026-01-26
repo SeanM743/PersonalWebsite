@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Sprout,
   Leaf,
   TreePine,
@@ -103,7 +103,7 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
     try {
       setIsLoading(true);
       const response = await apiService.getGardenNotes();
-      
+
       if (response.success) {
         const notesData = response.data || [];
         setNotes(notesData);
@@ -118,18 +118,18 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
   // Filter notes based on search term and selected stages
   useEffect(() => {
     let filtered = notes.filter(note => selectedStages.has(note.growthStage));
-    
+
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(note =>
         note.title.toLowerCase().includes(term) ||
         note.content.toLowerCase().includes(term) ||
-        note.linkedEntries.some(entry => 
+        note.linkedEntries.some(entry =>
           entry.title.toLowerCase().includes(term)
         )
       );
     }
-    
+
     setFilteredNotes(filtered);
   }, [notes, searchTerm, selectedStages]);
 
@@ -158,7 +158,7 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
   const handleDeleteNote = async (noteId: number) => {
     try {
       const response = await apiService.deleteGardenNote(noteId);
-      
+
       if (response.success) {
         setNotes(prev => prev.filter(note => note.id !== noteId));
         success('Note deleted successfully');
@@ -184,7 +184,7 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
   const handleFormSave = (savedNote: GardenNote) => {
     if (editingNote) {
       // Update existing note
-      setNotes(prev => prev.map(note => 
+      setNotes(prev => prev.map(note =>
         note.id === savedNote.id ? savedNote : note
       ));
     } else {
@@ -216,7 +216,7 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
       count: notes.filter(note => note.growthStage === stage).length,
       visible: selectedStages.has(stage)
     }));
-    
+
     return { totalNotes, filteredCount, stageStats };
   };
 
@@ -226,7 +226,7 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
 
   if (isLoading) {
     return (
-      <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+      <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
         <div className="flex items-center justify-center h-64">
           <LoadingSpinner size="large" />
         </div>
@@ -235,19 +235,19 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
   }
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+    <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Digital Garden</h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <h2 className="text-xl font-bold text-main">Digital Garden</h2>
+          <p className="text-sm text-muted mt-1">
             Cultivate your knowledge and ideas as they grow
           </p>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title="Toggle filters"
           >
             <Filter className="h-5 w-5" />
@@ -276,12 +276,12 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
 
       {/* Growth Stage Filters */}
       {showFilters && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-4 bg-page rounded-lg">
           {/* Filter Controls */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-medium text-gray-700">Filter by Growth Stage</h3>
-              <span className="text-xs text-gray-500">
+              <h3 className="text-sm font-medium text-main">Filter by Growth Stage</h3>
+              <span className="text-xs text-muted">
                 ({getFilterStats().filteredCount} of {getFilterStats().totalNotes} notes)
               </span>
             </div>
@@ -301,52 +301,48 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
               </button>
             </div>
           </div>
-          
+
           {/* Stage Filter Buttons */}
           <div className="flex flex-wrap gap-2 mb-4">
             {Object.values(GrowthStage).map(stage => {
               const config = getStageConfig(stage);
               const isSelected = selectedStages.has(stage);
               const stageCount = notes.filter(note => note.growthStage === stage).length;
-              
+
               return (
                 <button
                   key={stage}
                   onClick={() => toggleStageFilter(stage)}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all duration-200 hover:scale-105 active:scale-95 ${
-                    isSelected 
-                      ? `${config.bg} ${config.border} ${config.color} shadow-md` 
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg border-2 transition-all duration-200 hover:scale-105 active:scale-95 ${isSelected
+                      ? `${config.bg} ${config.border} ${config.color} shadow-md`
                       : `bg-white ${config.border} ${config.color} hover:${config.bg}`
-                  }`}
+                    }`}
                 >
                   <span className="text-lg">{config.emoji}</span>
                   <span className="text-sm font-medium">{config.label}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    isSelected ? 'bg-white bg-opacity-50' : 'bg-gray-200'
-                  }`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white bg-opacity-50' : 'bg-gray-200'
+                    }`}>
                     {stageCount}
                   </span>
                 </button>
               );
             })}
           </div>
-          
+
           {/* Stage Descriptions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
             {Object.values(GrowthStage).map(stage => {
               const config = getStageConfig(stage);
               const isVisible = selectedStages.has(stage);
-              
+
               return (
                 <div
                   key={stage}
-                  className={`p-2 rounded ${
-                    isVisible ? config.bg : 'bg-gray-100'
-                  } transition-colors duration-200`}
+                  className={`p-2 rounded ${isVisible ? config.bg : 'bg-gray-100'
+                    } transition-colors duration-200`}
                 >
-                  <div className={`flex items-center space-x-1 mb-1 ${
-                    isVisible ? config.color : 'text-gray-500'
-                  }`}>
+                  <div className={`flex items-center space-x-1 mb-1 ${isVisible ? config.color : 'text-gray-500'
+                    }`}>
                     <span>{config.emoji}</span>
                     <span className="font-medium">{config.label}</span>
                   </div>
@@ -379,15 +375,15 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
             <TreePine className="h-8 w-8 text-gray-400" />
           </div>
           <p className="text-gray-500 mb-2">
-            {selectedStages.size === 0 
-              ? 'Select growth stages to view notes.' 
-              : searchTerm 
+            {selectedStages.size === 0
+              ? 'Select growth stages to view notes.'
+              : searchTerm
                 ? 'No notes match your search criteria.'
                 : 'Your digital garden is empty.'
             }
           </p>
           <p className="text-sm text-gray-400">
-            {searchTerm 
+            {searchTerm
               ? 'Try adjusting your search terms or filters.'
               : 'Start cultivating knowledge by creating your first note.'
             }
@@ -400,13 +396,13 @@ const DigitalGardenView: React.FC<DigitalGardenViewProps> = ({ className = "" })
         <div className="mt-6 pt-4 border-t border-gray-200">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
-              <div className="text-2xl font-bold text-gray-900">{notes.length}</div>
-              <div className="text-sm text-gray-500">Total Notes</div>
+              <div className="text-2xl font-bold text-main">{notes.length}</div>
+              <div className="text-sm text-muted">Total Notes</div>
             </div>
             {Object.values(GrowthStage).map(stage => {
               const config = getStageConfig(stage);
               const count = notes.filter(note => note.growthStage === stage).length;
-              
+
               return (
                 <div key={stage}>
                   <div className={`text-2xl font-bold ${config.color}`}>

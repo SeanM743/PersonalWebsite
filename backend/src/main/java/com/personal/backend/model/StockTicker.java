@@ -60,29 +60,29 @@ public class StockTicker {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
     
-    // Calculated fields (not persisted)
-    @Transient
+    // Market Data Fields (Persisted)
+    @Column(precision = 19, scale = 4)
     private BigDecimal currentPrice;
     
-    @Transient
+    @Transient // Calculated from currentPrice * quantity
     private BigDecimal currentValue;
     
-    @Transient
+    @Transient // Calculated
     private BigDecimal totalGainLoss;
     
-    @Transient
+    @Transient // Calculated
     private BigDecimal totalGainLossPercentage;
     
-    @Transient
+    @Column(precision = 19, scale = 4)
     private BigDecimal dailyChange;
     
-    @Transient
+    @Column(precision = 10, scale = 4)
     private BigDecimal dailyChangePercentage;
     
-    @Transient
+    @Column
     private LocalDateTime lastPriceUpdate;
     
-    @Transient
+    @Column
     private Boolean isMarketOpen;
     
     @PreUpdate

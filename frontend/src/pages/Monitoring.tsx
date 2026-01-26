@@ -77,38 +77,38 @@ const Monitoring: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page">
       <div className="max-w-7xl mx-auto p-6">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Service Health Dashboard</h1>
-          <p className="text-gray-600">Real-time monitoring and performance metrics</p>
+          <h1 className="text-3xl font-bold text-main mb-2">Service Health Dashboard</h1>
+          <p className="text-muted">Real-time monitoring and performance metrics</p>
         </div>
 
         {/* Quick Stats */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-card rounded-lg shadow-sm p-4 border border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Health Score</p>
-                  <p className="text-2xl font-bold text-gray-900">{summary.healthScore || 0}</p>
+                  <p className="text-sm text-muted">Health Score</p>
+                  <p className="text-2xl font-bold text-main">{summary.healthScore || 0}</p>
                 </div>
                 <div className={`p-3 rounded-full ${(summary.healthScore || 0) >= 90 ? 'bg-green-100' :
-                    (summary.healthScore || 0) >= 70 ? 'bg-yellow-100' : 'bg-red-100'
+                  (summary.healthScore || 0) >= 70 ? 'bg-yellow-100' : 'bg-red-100'
                   }`}>
                   <CheckCircle className={`h-6 w-6 ${(summary.healthScore || 0) >= 90 ? 'text-green-600' :
-                      (summary.healthScore || 0) >= 70 ? 'text-yellow-600' : 'text-red-600'
+                    (summary.healthScore || 0) >= 70 ? 'text-yellow-600' : 'text-red-600'
                     }`} />
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-card rounded-lg shadow-sm p-4 border border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Avg Response Time</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-sm text-muted">Avg Response Time</p>
+                  <p className="text-2xl font-bold text-main">
                     {summary.avgResponseTime ? `${summary.avgResponseTime.toFixed(0)}ms` : 'N/A'}
                   </p>
                 </div>
@@ -118,11 +118,11 @@ const Monitoring: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-card rounded-lg shadow-sm p-4 border border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Cache Hit Ratio</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-sm text-muted">Cache Hit Ratio</p>
+                  <p className="text-2xl font-bold text-main">
                     {summary.cacheHitRatio ? `${(summary.cacheHitRatio * 100).toFixed(1)}%` : 'N/A'}
                   </p>
                 </div>
@@ -132,11 +132,11 @@ const Monitoring: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-card rounded-lg shadow-sm p-4 border border-border">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Throttling Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                  <p className="text-sm text-muted">Throttling Rate</p>
+                  <p className="text-2xl font-bold text-main">
                     {summary.throttlingRate ? `${(summary.throttlingRate * 100).toFixed(2)}%` : 'N/A'}
                   </p>
                 </div>
@@ -149,8 +149,8 @@ const Monitoring: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm mb-6">
-          <div className="border-b border-gray-200">
+        <div className="bg-card rounded-lg shadow-sm mb-6 border border-border">
+          <div className="border-b border-border">
             <nav className="flex space-x-8 px-6" aria-label="Tabs">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
@@ -161,8 +161,8 @@ const Monitoring: React.FC = () => {
                     className={`
                       flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm
                       ${activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted hover:text-main hover:border-border'
                       }
                     `}
                   >

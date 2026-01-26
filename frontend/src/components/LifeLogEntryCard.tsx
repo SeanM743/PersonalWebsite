@@ -141,7 +141,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               key={star}
               className={`h-4 w-4 ${star <= rating
                 ? 'text-yellow-400 fill-current'
-                : 'text-gray-300'
+                : 'text-muted/30'
                 }`}
             />
           ))}
@@ -164,7 +164,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               key={level}
               className={`w-2 h-2 rounded-full ${level <= intensity
                 ? 'bg-orange-500'
-                : 'bg-gray-300'
+                : 'bg-muted/30'
                 }`}
             />
           ))}
@@ -177,7 +177,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
   const duration = calculateDuration();
 
   return (
-    <div className={`border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 hover:border-gray-300 bg-white ${className}`}>
+    <div className={`border border-border rounded-xl p-4 hover:shadow-lg transition-all duration-200 hover:border-primary/30 bg-card ${className}`}>
       <div className="flex items-start space-x-4">
         {/* Type Icon */}
         <div className={`w-12 h-12 ${getColorForType(entry.type)} rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
@@ -190,13 +190,13 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
             <div className="flex-1">
               {/* Title and Type */}
               <div className="flex items-start justify-between mb-2">
-                <h3 className={`font-semibold text-gray-900 ${compact ? 'text-base' : 'text-lg'} leading-tight`}>
+                <h3 className={`font-semibold text-main ${compact ? 'text-base' : 'text-lg'} leading-tight`}>
                   {entry.title}
                 </h3>
                 {onView && (
                   <button
                     onClick={() => onView(entry)}
-                    className="ml-2 p-1 text-gray-400 hover:text-blue-600 transition-colors rounded"
+                    className="ml-2 p-1 text-muted hover:text-primary transition-colors rounded"
                     title="View details"
                   >
                     <Eye className="h-4 w-4" />
@@ -209,7 +209,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(entry.status)}`}>
                   {formatStatus(entry.status)}
                 </span>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-page text-muted border border-border">
                   {formatType(entry.type)}
                 </span>
               </div>
@@ -217,7 +217,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               {/* Dates and Duration */}
               {!compact && (
                 <div className="space-y-2 mb-3">
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <div className="flex items-center space-x-4 text-sm text-muted">
                     {entry.startDate && (
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-4 w-4" />
@@ -232,7 +232,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
                     )}
                   </div>
                   {duration && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-muted">
                       Duration: {duration}
                     </div>
                   )}
@@ -243,13 +243,13 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               <div className="space-y-2 mb-3">
                 {entry.rating && (
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Mahoney Rating</div>
+                    <div className="text-xs text-muted mb-1">Mahoney Rating</div>
                     {renderRating(entry.rating)}
                   </div>
                 )}
                 {entry.intensity && entry.type === LifeLogType.HOBBY && (
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Intensity</div>
+                    <div className="text-xs text-muted mb-1">Intensity</div>
                     {renderIntensity(entry.intensity)}
                   </div>
                 )}
@@ -266,8 +266,8 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               {/* Compact Key Takeaway */}
               {entry.keyTakeaway && compact && (
                 <div className="mb-3">
-                  <p className="text-xs text-gray-500 mb-1">Key Takeaway:</p>
-                  <p className="text-sm text-gray-700 line-clamp-2">{entry.keyTakeaway}</p>
+                  <p className="text-xs text-muted mb-1">Key Takeaway:</p>
+                  <p className="text-sm text-main line-clamp-2">{entry.keyTakeaway}</p>
                 </div>
               )}
             </div>
@@ -289,8 +289,8 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-            <div className="text-xs text-gray-500">
+          <div className="flex items-center justify-between pt-3 border-t border-border">
+            <div className="text-xs text-muted">
               {entry.updatedAt && (
                 <>Updated {formatDate(entry.updatedAt)}</>
               )}
@@ -299,7 +299,7 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               {entry.type === LifeLogType.BOOK && entry.metadata && (
                 <button
                   onClick={() => setIsModalOpen(true)}
-                  className="p-1 px-2 text-gray-500 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50 flex items-center space-x-1"
+                  className="p-1 px-2 text-muted hover:text-primary transition-colors rounded-md hover:bg-page flex items-center space-x-1"
                   title="View Book Details"
                 >
                   <Info className="h-3 w-3" />
@@ -308,14 +308,14 @@ const LifeLogEntryCard: React.FC<LifeLogEntryCardProps> = ({
               )}
               <button
                 onClick={() => onEdit(entry)}
-                className="flex items-center space-x-1 px-2 py-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                className="flex items-center space-x-1 px-2 py-1 text-xs text-primary hover:text-primary/80 hover:bg-page rounded-md transition-colors"
               >
                 <Edit className="h-3 w-3" />
                 <span>Edit</span>
               </button>
               <button
                 onClick={() => onDelete(entry)}
-                className="flex items-center space-x-1 px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                className="flex items-center space-x-1 px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50/10 rounded-md transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
                 <span>Delete</span>

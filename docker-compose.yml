@@ -24,6 +24,47 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d personal_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: personal_backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/personal_platform
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=password
+      - GOOGLE_CALENDAR_CREDENTIALS_PATH=/app/config/google/google-calendar-credentials.json
+    volumes:
+      - ./backend:/app
+      - ~/.m2:/root/.m2
+      - ~/.config/google/google-calendar-credentials.json:/app/config/google/google-calendar-credentials.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: personal_frontend
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+    depends_on:
+      - backend
 
   prometheus:
     image: prom/prometheus:latest
@@ -38,3 +79,5 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: personal_webpage_postgres_data_dev

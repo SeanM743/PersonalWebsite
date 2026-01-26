@@ -205,15 +205,15 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
 
   return (
     <>
-      <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+      <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Now</h2>
-            <p className="text-sm text-gray-500 mt-1">Current status and focus</p>
+            <h2 className="text-xl font-bold text-main">Now</h2>
+            <p className="text-sm text-muted mt-1">Current status and focus</p>
           </div>
           <button
             onClick={handleEditQuickFacts}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title="Add new quick fact"
           >
             <Plus className="h-5 w-5" />
@@ -224,20 +224,20 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
           {quickFacts.length > 0 ? (
             quickFacts.map((fact) => (
               <div key={fact.key} className="group">
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl p-5 hover:shadow-lg transition-all duration-300 border border-gray-100 hover:border-gray-200">
+                <div className="bg-gradient-to-br from-page to-card rounded-xl p-5 hover:shadow-lg transition-all duration-300 border border-border hover:border-primary/30">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className={`w-10 h-10 ${getColorForCategory(fact.category, fact.key)} rounded-xl flex items-center justify-center text-white shadow-sm`}>
                       {getIconForCategory(fact.category, fact.key)}
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+                      <div className="text-sm font-medium text-muted uppercase tracking-wide">
                         {fact.key}
                       </div>
                     </div>
                   </div>
 
                   <div
-                    className="font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors text-lg leading-tight mb-3"
+                    className="font-semibold text-main cursor-pointer hover:text-primary transition-colors text-lg leading-tight mb-3"
                     onClick={() => handleQuickFactClick(fact)}
                   >
                     {fact.value}
@@ -249,14 +249,14 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-muted">
                       Updated {new Date(fact.updatedAt).toLocaleDateString()}
                     </div>
                     <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {fact.isEnriched && fact.metadata && (
                         <button
                           onClick={() => handleShowMetadata(fact)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50"
+                          className="p-1.5 text-muted hover:text-primary transition-colors rounded-md hover:bg-page"
                           title="View metadata"
                         >
                           <Info className="h-3.5 w-3.5" />
@@ -264,14 +264,14 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
                       )}
                       <button
                         onClick={() => handleEditQuickFact(fact)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors rounded-md hover:bg-blue-50"
+                        className="p-1.5 text-muted hover:text-primary transition-colors rounded-md hover:bg-page"
                         title="Edit"
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => handleDeleteQuickFact(fact)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-md hover:bg-red-50"
+                        className="p-1.5 text-muted hover:text-red-600 transition-colors rounded-md hover:bg-red-50/10"
                         title="Delete"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -319,16 +319,16 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
       {/* Quick Fact Details Modal */}
       {isModalOpen && selectedQuickFact && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-border">
             <div className="p-6">
               {/* Modal Header */}
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-xl font-semibold text-main">
                   {selectedQuickFact.key}
                 </h2>
                 <button
                   onClick={() => setIsModalOpen(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="text-muted hover:text-main transition-colors"
                 >
                   <Plus className="h-6 w-6 rotate-45" />
                 </button>
@@ -355,15 +355,15 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
                   )}
 
                   {/* Basic Info */}
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-page rounded-lg p-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <span className="text-sm font-medium text-gray-500">Category:</span>
-                        <p className="text-gray-900 capitalize">{selectedQuickFact.category}</p>
+                        <span className="text-sm font-medium text-muted">Category:</span>
+                        <p className="text-main capitalize">{selectedQuickFact.category}</p>
                       </div>
                       <div>
-                        <span className="text-sm font-medium text-gray-500">Value:</span>
-                        <p className="text-gray-900">{selectedQuickFact.value}</p>
+                        <span className="text-sm font-medium text-muted">Value:</span>
+                        <p className="text-main">{selectedQuickFact.value}</p>
                       </div>
                     </div>
                   </div>
@@ -371,16 +371,16 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
                   {/* Description */}
                   {selectedQuickFact.description && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-2">Description</h3>
-                      <p className="text-gray-700 leading-relaxed">{selectedQuickFact.description}</p>
+                      <h3 className="text-sm font-medium text-muted mb-2">Description</h3>
+                      <p className="text-main leading-relaxed">{selectedQuickFact.description}</p>
                     </div>
                   )}
 
                   {/* Rich Metadata */}
                   {selectedQuickFact.metadata && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500 mb-2">Details</h3>
-                      <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-sm font-medium text-muted mb-2">Details</h3>
+                      <div className="bg-page rounded-lg p-4">
                         {(() => {
                           try {
                             const metadata = JSON.parse(selectedQuickFact.metadata);
@@ -388,10 +388,10 @@ const NowSection: React.FC<NowSectionProps> = ({ quickFacts, onQuickFactsChange,
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 {Object.entries(metadata).map(([key, value]) => (
                                   <div key={key}>
-                                    <span className="text-sm font-medium text-gray-500 capitalize">
+                                    <span className="text-sm font-medium text-muted capitalize">
                                       {key.replace(/([A-Z])/g, ' $1').trim()}:
                                     </span>
-                                    <p className="text-gray-900">{String(value)}</p>
+                                    <p className="text-main">{String(value)}</p>
                                   </div>
                                 ))}
                               </div>

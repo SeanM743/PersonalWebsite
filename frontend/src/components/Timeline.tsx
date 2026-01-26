@@ -119,43 +119,43 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
         return {
           bg: 'bg-amber-500',
           border: 'border-amber-600',
-          text: 'text-amber-900',
-          light: 'bg-amber-100'
+          text: 'text-amber-900 dark:text-amber-100',
+          light: 'bg-amber-100 dark:bg-amber-900/30'
         };
       case LifeLogType.MOVIE:
         return {
           bg: 'bg-red-500',
           border: 'border-red-600',
-          text: 'text-red-900',
-          light: 'bg-red-100'
+          text: 'text-red-900 dark:text-red-100',
+          light: 'bg-red-100 dark:bg-red-900/30'
         };
       case LifeLogType.SHOW:
         return {
           bg: 'bg-purple-500',
           border: 'border-purple-600',
-          text: 'text-purple-900',
-          light: 'bg-purple-100'
+          text: 'text-purple-900 dark:text-purple-100',
+          light: 'bg-purple-100 dark:bg-purple-900/30'
         };
       case LifeLogType.ALBUM:
         return {
           bg: 'bg-blue-500',
           border: 'border-blue-600',
-          text: 'text-blue-900',
-          light: 'bg-blue-100'
+          text: 'text-blue-900 dark:text-blue-100',
+          light: 'bg-blue-100 dark:bg-blue-900/30'
         };
       case LifeLogType.HOBBY:
         return {
           bg: 'bg-green-500',
           border: 'border-green-600',
-          text: 'text-green-900',
-          light: 'bg-green-100'
+          text: 'text-green-900 dark:text-green-100',
+          light: 'bg-green-100 dark:bg-green-900/30'
         };
       default:
         return {
           bg: 'bg-gray-500',
           border: 'border-gray-600',
-          text: 'text-gray-900',
-          light: 'bg-gray-100'
+          text: 'text-gray-900 dark:text-gray-100',
+          light: 'bg-gray-100 dark:bg-gray-800'
         };
     }
   };
@@ -172,17 +172,22 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
 
         // Calculate time range
         if (timelineData.length > 0) {
-          const dates = timelineData
+          const allTimestamps = timelineData
             .filter((entry: LifeLogEntry) => entry.startDate)
-            .map((entry: LifeLogEntry) => new Date(entry.startDate!));
+            .flatMap((entry: LifeLogEntry) => {
+              const start = new Date(entry.startDate!).getTime();
+              const end = entry.endDate ? new Date(entry.endDate).getTime() : start;
+              return [start, end];
+            });
 
-          if (dates.length > 0) {
-            const minDate = new Date(Math.min(...dates.map((d: Date) => d.getTime())));
-            const maxDate = new Date(Math.max(...dates.map((d: Date) => d.getTime())));
+          if (allTimestamps.length > 0) {
+            const minDate = new Date(Math.min(...allTimestamps));
+            const maxDate = new Date(Math.max(...allTimestamps));
 
             // Add some padding to the range (7 days)
-            minDate.setDate(minDate.getDate() - 7);
-            maxDate.setDate(maxDate.getDate() + 7);
+            // Add minimal padding to the range (1 day) to avoid edge clipping
+            minDate.setDate(minDate.getDate() - 1);
+            maxDate.setDate(maxDate.getDate() + 1);
 
             setTimeRange({ start: minDate, end: maxDate });
           }
@@ -207,7 +212,8 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
       return;
     }
 
-    const timelineWidth = 1200; // Base timeline width
+    // Use 100 as base for percentage calculation
+    const timelineWidth = 100;
     const totalDuration = timeRange.end.getTime() - timeRange.start.getTime();
 
     // Calculate positions and widths for entries
@@ -218,8 +224,8 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
       const startPosition = ((startDate.getTime() - timeRange.start.getTime()) / totalDuration) * timelineWidth;
       const endPosition = ((endDate.getTime() - timeRange.start.getTime()) / totalDuration) * timelineWidth;
 
-      // Use a larger minimum width for visual readability
-      const minVisualWidth = 140;
+      // Use a smaller minimum width for visual readability (in %) - reduced from 10% to 1% to prevent distortion
+      const minVisualWidth = 1;
       const temporalWidth = endPosition - startPosition;
       const width = Math.max(temporalWidth, minVisualWidth);
 
@@ -383,7 +389,13 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
   };
 
   // Format date for timeline markers
-  const formatTimelineDate = (date: Date) => {
+  const formatTimelineDate = (date: Date, type: 'month' | 'week' = 'month') => {
+    if (type === 'week') {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      });
+    }
     return date.toLocaleDateString('en-US', {
       month: 'short',
       year: 'numeric'
@@ -393,19 +405,64 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
   // Generate timeline markers
   const generateTimelineMarkers = () => {
     const markers = [];
+    const durationMs = timeRange.end.getTime() - timeRange.start.getTime();
+    const durationDays = durationMs / (1000 * 60 * 60 * 24);
+
+    // Determine interval type based on duration
+    const isShortDuration = durationDays < 60;
+
     const current = new Date(timeRange.start);
-    current.setDate(1); // Start of month
 
-    while (current <= timeRange.end) {
-      const position = ((current.getTime() - timeRange.start.getTime()) /
-        (timeRange.end.getTime() - timeRange.start.getTime())) * 1200;
+    if (isShortDuration) {
+      // For short duration, show weekly markers (Mondays)
+      // Find previous Monday
+      const day = current.getDay();
+      const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+      current.setDate(diff);
 
-      markers.push({
-        date: new Date(current),
-        position: Math.max(0, Math.min(1200, position))
-      });
+      // Ensure time is reset to avoid drift
+      current.setHours(0, 0, 0, 0);
 
-      current.setMonth(current.getMonth() + 1); // Every month
+      while (current <= timeRange.end) {
+        // Only add if within view (with small buffer)
+        if (current >= timeRange.start) {
+          const position = ((current.getTime() - timeRange.start.getTime()) / durationMs) * 100;
+
+          if (position >= 0 && position <= 100) {
+            markers.push({
+              date: new Date(current),
+              position: position,
+              type: 'week' as const
+            });
+          }
+        }
+
+        // Next week
+        current.setDate(current.getDate() + 7);
+      }
+    } else {
+      // For longer duration, show monthly markers (1st of month)
+      current.setDate(1); // Start of month
+
+      // Ensure time is reset
+      current.setHours(0, 0, 0, 0);
+
+      while (current <= timeRange.end) {
+        // Only add if within view (or close enough to be meaningful context)
+        if (current >= timeRange.start || current.getMonth() === timeRange.start.getMonth()) {
+          const position = ((current.getTime() - timeRange.start.getTime()) / durationMs) * 100;
+
+          if (position >= 0 && position <= 100) {
+            markers.push({
+              date: new Date(current),
+              position: position,
+              type: 'month' as const
+            });
+          }
+        }
+
+        current.setMonth(current.getMonth() + 1); // Every month
+      }
     }
 
     return markers;
@@ -432,24 +489,24 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
   const timelineMarkers = generateTimelineMarkers();
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm p-6 ${className}`}>
+    <div className={`bg-card rounded-xl shadow-sm p-6 border border-border ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Timeline</h2>
-          <p className="text-sm text-gray-500 mt-1">Visual chronology of your activities and media</p>
+          <h2 className="text-xl font-bold text-main">Timeline</h2>
+          <p className="text-sm text-muted mt-1">Visual chronology of your activities and media</p>
         </div>
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title="Toggle filters"
           >
             <Filter className="h-5 w-5" />
           </button>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="p-2 text-gray-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-blue-50"
+            className="p-2 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
             title={isExpanded ? "Collapse timeline" : "Expand timeline"}
           >
             {isExpanded ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
@@ -459,27 +516,27 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
 
       {/* Enhanced Type Filters */}
       {showFilters && (
-        <div className={`mb-6 p-4 bg-gray-50 rounded-lg transition-all duration-300 ease-in-out ${filterTransition ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
+        <div className={`mb-6 p-4 bg-page rounded-lg transition-all duration-300 ease-in-out ${filterTransition ? 'opacity-50 scale-95' : 'opacity-100 scale-100'
           }`}>
           {/* Filter Controls */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-medium text-gray-700">Filter by Type</h3>
-              <span className="text-xs text-gray-500">
+              <h3 className="text-sm font-medium text-main">Filter by Type</h3>
+              <span className="text-xs text-muted">
                 ({getFilterStats().filteredEntries} of {getFilterStats().totalEntries} entries)
               </span>
             </div>
             <div className="flex items-center space-x-2">
               <button
                 onClick={selectAllTypes}
-                className="text-xs text-blue-600 hover:text-blue-700 transition-colors"
+                className="text-xs text-primary hover:text-primary/80 transition-colors"
               >
                 Select All
               </button>
-              <span className="text-gray-300">|</span>
+              <span className="text-muted">|</span>
               <button
                 onClick={deselectAllTypes}
-                className="text-xs text-gray-600 hover:text-gray-700 transition-colors"
+                className="text-xs text-muted hover:text-main transition-colors"
               >
                 Clear All
               </button>
@@ -523,7 +580,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
               return (
                 <div
                   key={type}
-                  className={`flex items-center justify-between p-2 rounded ${visible ? colors.light : 'bg-gray-100'
+                  className={`flex items-center justify-between p-2 rounded ${visible ? colors.light : 'bg-page'
                     } transition-colors duration-200`}
                 >
                   <span className={visible ? colors.text : 'text-gray-500'}>
@@ -543,7 +600,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
       {timelineEntries.length > 0 ? (
         <div className={`relative ${isExpanded ? 'h-96' : 'h-64'} overflow-x-auto overflow-y-hidden`}>
           <div
-            className="relative w-full min-w-[1200px]"
+            className="relative w-full min-w-[800px]"
             style={{
               height: `${lanes.reduce((total, lane, index) =>
                 total + (lane.height || 60) + (index < lanes.length - 1 ? 10 : 0), 60
@@ -556,11 +613,15 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                 <div
                   key={index}
                   className="absolute top-0 h-full flex flex-col items-center"
-                  style={{ left: `${marker.position}px` }}
+                  style={{ left: `${marker.position}%` }}
                 >
                   <div className="w-px h-full bg-gray-300"></div>
-                  <div className="absolute top-0 -translate-x-1/2 text-xs text-gray-500 bg-white px-1">
-                    {formatTimelineDate(marker.date)}
+                  {/* Smart label alignment: Left align first, Right align last, Center others */}
+                  <div className={`absolute top-0 text-xs text-muted bg-card px-1 ${marker.position < 5 ? 'left-0' :
+                    marker.position > 95 ? 'right-0' :
+                      '-translate-x-1/2'
+                    }`}>
+                    {formatTimelineDate(marker.date, marker.type)}
                   </div>
                 </div>
               ))}
@@ -587,9 +648,9 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                         : 'hover:shadow-lg hover:scale-105 hover:z-10'
                       }`}
                     style={{
-                      left: `${entry.startPosition}px`,
+                      left: `${entry.startPosition}%`,
                       top: `${entry.lane * (laneHeight + 10)}px`,
-                      width: `${entry.width}px`,
+                      width: `${entry.width}%`,
                       height: `${Math.min(laneHeight - 10, 50)}px`,
                       animationDelay: `${index * 30}ms`,
                       transitionDelay: isVisible ? `${index * 20}ms` : '0ms'
@@ -623,7 +684,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                         </div>
                       </div>
                       {/* Enhanced duration indicator */}
-                      {entry.width > 100 && entry.endDate && (
+                      {entry.width > 5 && entry.endDate && (
                         <div className="text-white text-xs opacity-75 flex-shrink-0 bg-black bg-opacity-20 px-1 rounded transition-all duration-200 group-hover:bg-opacity-30">
                           {Math.ceil((new Date(entry.endDate).getTime() - new Date(entry.startDate!).getTime()) / (1000 * 60 * 60 * 24))}d
                         </div>
@@ -748,7 +809,35 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                 {selectedEntry.metadata && (
                   <div>
                     <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Details</h4>
-                    <p className="text-gray-700 whitespace-pre-line">{selectedEntry.metadata}</p>
+                    <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                      {(() => {
+                        try {
+                          const metadata = JSON.parse(selectedEntry.metadata);
+                          return (
+                            <div className="grid grid-cols-1 gap-2">
+                              {Object.entries(metadata).map(([key, value]) => {
+                                // Skip null/empty values and internal fields
+                                if (!value || key === 'cover_i' || key === 'key' || key === 'color_name') return null;
+
+                                return (
+                                  <div key={key} className="flex flex-col sm:flex-row sm:space-x-2">
+                                    <span className="font-medium text-gray-700 capitalize min-w-[120px]">
+                                      {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim()}:
+                                    </span>
+                                    <span className="text-gray-900 break-words">
+                                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        } catch (e) {
+                          // Fallback for non-JSON content
+                          return <p className="text-gray-700 whitespace-pre-line">{selectedEntry.metadata}</p>;
+                        }
+                      })()}
+                    </div>
                   </div>
                 )}
 

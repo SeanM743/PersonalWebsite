@@ -7,6 +7,7 @@ import com.personal.backend.dto.StockRequest;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.service.PortfolioService;
 import com.personal.backend.service.StockHoldingService;
+import com.personal.backend.service.StockTransactionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -30,6 +31,7 @@ public class PortfolioController {
     
     private final PortfolioService portfolioService;
     private final StockHoldingService stockHoldingService;
+    private final StockTransactionService stockTransactionService;
     
     /**
      * Get portfolio summary with real-time market data
@@ -414,5 +416,54 @@ public class PortfolioController {
         log.error("Security error: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(PortfolioResponse.error("Access denied: " + e.getMessage()));
+    }
+
+    /**
+     * Get stock transaction history
+     * GET /api/portfolio/transactions
+     */
+    @GetMapping("/transactions")
+    public ResponseEntity<PortfolioResponse<List<com.personal.backend.model.StockTransaction>>> getTransactions(
+            Authentication authentication) {
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            log.info("Getting stock transactions for user {}", userId);
+
+            List<com.personal.backend.model.StockTransaction> transactions = stockTransactionService.getTransactions(userId);
+
+            return ResponseEntity.ok(PortfolioResponse.success(transactions, "Transactions retrieved successfully"));
+
+        } catch (Exception e) {
+            log.error("Error getting transactions: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
+    }
+
+
+    /**
+     * Add new stock transaction
+     * POST /api/portfolio/transactions
+     */
+    @PostMapping("/transactions")
+    public ResponseEntity<PortfolioResponse<com.personal.backend.model.StockTransaction>> addTransaction(
+            @Valid @RequestBody com.personal.backend.model.StockTransaction transaction,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            transaction.setUserId(userId);
+            
+            log.info("Adding transaction for user {}: {} {}", userId, transaction.getType(), transaction.getSymbol());
+            
+            com.personal.backend.model.StockTransaction savedTxn = stockTransactionService.addTransaction(transaction);
+            
+            return ResponseEntity.ok(PortfolioResponse.success(savedTxn, "Transaction added successfully"));
+            
+        } catch (Exception e) {
+            log.error("Error adding transaction: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
     }
 }

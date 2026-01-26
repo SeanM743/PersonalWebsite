@@ -1,7 +1,9 @@
 package com.personal.backend.service;
 
-import com.personal.backend.model.StockTicker;
-import com.personal.backend.repository.StockTickerRepository;
+import com.personal.backend.model.Account;
+import com.personal.backend.repository.AccountRepository;
+import com.personal.backend.model.StockTransaction;
+import com.personal.backend.repository.StockTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -9,141 +11,165 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Service to initialize portfolio data with real holdings
+ * Service to initialize portfolio data with real transaction history
  * Runs automatically on application startup
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PortfolioDataInitializer implements CommandLineRunner {
-    
-    private final StockTickerRepository stockRepository;
-    
+
+    private final StockTransactionRepository transactionRepository;
+    private final AccountRepository accountRepository;
+
     @Override
     @Transactional
     public void run(String... args) {
         try {
-            initializeRealPortfolioData();
+            initializeAccounts();
+            initializeStockTransactions();
         } catch (Exception e) {
             log.error("Failed to initialize portfolio data: {}", e.getMessage(), e);
         }
     }
-    
-    /**
-     * Initialize portfolio with real stock holdings
-     */
-    private void initializeRealPortfolioData() {
-        Long userId = 1L; // Admin user
-        
-        // Check if portfolio data already exists
-        long existingCount = stockRepository.countByUserId(userId);
-        if (existingCount > 0) {
-            log.info("Portfolio data already exists for user {} ({} positions). Skipping initialization.", 
-                    userId, existingCount);
+
+    private void initializeAccounts() {
+        if (accountRepository.count() > 0) {
+            log.info("Accounts already initialized. Checking for updates...");
+            updateFidelityCashBalance(); // Force update if needed
+            renameAmazonAccount();      // Rename Amazon Account to Amazon 401k
             return;
         }
-        
-        log.info("Initializing real portfolio data for user {}", userId);
-        
-        // Define real portfolio holdings
-        List<StockHolding> realHoldings = List.of(
-            // Major Holdings (sorted by market value)
-            new StockHolding("AMZN", new BigDecimal("232.38"), new BigDecimal("3462"), 
-                "Amazon.com Inc - E-commerce and cloud computing giant"),
-            new StockHolding("SOFI", new BigDecimal("27.48"), new BigDecimal("3500"), 
-                "SoFi Technologies Inc - Digital financial services platform"),
-            new StockHolding("ANET", new BigDecimal("130.77"), new BigDecimal("600"), 
-                "Arista Networks Inc - Cloud networking solutions"),
-            new StockHolding("QQQ", new BigDecimal("623.93"), new BigDecimal("109.903"), 
-                "Invesco QQQ Trust ETF - Nasdaq 100 tracking ETF"),
-            new StockHolding("CRWV", new BigDecimal("78.87"), new BigDecimal("634.128"), 
-                "CoreWeave Inc Class A - AI cloud infrastructure"),
-            new StockHolding("ACHR", new BigDecimal("8.13"), new BigDecimal("5000"), 
-                "Archer Aviation Inc - Electric vertical takeoff aircraft"),
-            new StockHolding("INTC", new BigDecimal("36.16"), new BigDecimal("906.672"), 
-                "Intel Corporation - Semiconductor manufacturer"),
-            new StockHolding("SOUN", new BigDecimal("10.90"), new BigDecimal("2500"), 
-                "SoundHound AI Inc Class A - Voice AI technology")
+
+        log.info("Initializing financial accounts...");
+
+        // 1. Stock Portfolio (Dynamic)
+        accountRepository.save(Account.builder()
+                .name("Stock Portfolio")
+                .type(Account.AccountType.STOCK_PORTFOLIO)
+                .balance(BigDecimal.ZERO) // Calculated from holdings
+                .isManual(false)
+                .build());
+
+        // 2. Fidelity Cash
+        accountRepository.save(Account.builder()
+                .name("Fidelity Cash")
+                .type(Account.AccountType.CASH)
+                .balance(new BigDecimal("394828.35")) // Updated per user request
+                .isManual(true)
+                .build());
+
+        // 3. Explicit User Accounts
+        List<Account> userAccounts = List.of(
+            Account.builder().name("Roth IRA").type(Account.AccountType.RETIREMENT).balance(new BigDecimal("27478.81")).build(),
+            Account.builder().name("Amazon 401k").type(Account.AccountType.OTHER).balance(new BigDecimal("122618.65")).build(),
+            Account.builder().name("Amazon RSU").type(Account.AccountType.OTHER).balance(new BigDecimal("228876.12")).build(),
+            Account.builder().name("Evalyn's College Fund").type(Account.AccountType.EDUCATION).balance(new BigDecimal("24866.64")).build(),
+            Account.builder().name("Madelyn's College Fund").type(Account.AccountType.EDUCATION).balance(new BigDecimal("23362.45")).build(),
+            Account.builder().name("Nathan's College Fund").type(Account.AccountType.EDUCATION).balance(new BigDecimal("23682.82")).build(),
+            Account.builder().name("Thrift Savings Plan").type(Account.AccountType.RETIREMENT).balance(new BigDecimal("219013.78")).build()
         );
         
-        // Create and save stock ticker entities
-        LocalDateTime now = LocalDateTime.now();
-        int savedCount = 0;
-        BigDecimal totalInvestment = BigDecimal.ZERO;
-        
-        for (StockHolding holding : realHoldings) {
+        accountRepository.saveAll(userAccounts);
+        log.info("Successfully seeded {} financial accounts", userAccounts.size() + 2);
+    }
+
+    private void updateFidelityCashBalance() {
+        Account account = accountRepository.findByName("Fidelity Cash");
+        if (account != null) {
+            boolean changed = false;
+            // Update balance if it's the old default
+            if (account.getBalance().compareTo(new BigDecimal("10000.00")) == 0) {
+                account.setBalance(new BigDecimal("394828.35"));
+                changed = true;
+            }
+            if (changed) {
+                accountRepository.save(account);
+                log.info("Updated Fidelity Cash balance to correct value");
+            }
+        }
+    }
+
+    private void renameAmazonAccount() {
+        Account account = accountRepository.findByName("Amazon Account");
+        if (account != null) {
+            account.setName("Amazon 401k");
+            accountRepository.save(account);
+            log.info("Renamed 'Amazon Account' to 'Amazon 401k'");
+        }
+    }
+
+    private void initializeStockTransactions() {
+        Long userId = 1L; // Admin user
+
+        if (transactionRepository.count() > 0) {
+            log.info("Stock transactions already exist. Skipping initialization.");
+            return;
+        }
+
+        log.info("Initializing stock transaction history for user {}", userId);
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM-dd-yyyy", Locale.US);
+
+        List<TransactionSeed> seeds = List.of(
+            new TransactionSeed("ACHR", "Feb-20-2025", "5000", "9.57"),
+            new TransactionSeed("AMZN", "Nov-17-2025", "434", "231.49"),
+            new TransactionSeed("AMZN", "May-15-2025", "403", "204.21"),
+            new TransactionSeed("AMZN", "Nov-21-2024", "257", "198.47"),
+            new TransactionSeed("AMZN", "Nov-15-2024", "639", "203.10"),
+            new TransactionSeed("AMZN", "May-21-2024", "257", "181.52"),
+            new TransactionSeed("AMZN", "May-15-2024", "635", "184.35"),
+            new TransactionSeed("AMZN", "Mar-15-2024", "321", "175.44"),
+            new TransactionSeed("AMZN", "Nov-15-2023", "45", "144.42"),
+            new TransactionSeed("AMZN", "Sep-15-2023", "348", "141.22"),
+            new TransactionSeed("AMZN", "May-15-2023", "23", "110.38"),
+            new TransactionSeed("ANET", "Feb-19-2025", "600", "102.65"),
+            new TransactionSeed("CRWV", "Nov-14-2025", "148", "78.84"),
+            new TransactionSeed("CRWV", "Nov-14-2025", "1", "78.89"),
+            new TransactionSeed("CRWV", "Nov-14-2025", "0.128", "78.83"), // Assuming 0.128 based on provided text
+            new TransactionSeed("CRWV", "Nov-14-2025", "485", "78.85"),
+            new TransactionSeed("INTC", "Oct-29-2021", "0.672", "48.91"),
+            new TransactionSeed("INTC", "Oct-29-2021", "306", "48.91"),
+            new TransactionSeed("INTC", "May-10-2021", "600", "56.46"),
+            new TransactionSeed("QQQ", "Jan-24-2022", "0.903", "341.21"),
+            new TransactionSeed("QQQ", "Jan-24-2022", "109", "341.21"),
+            new TransactionSeed("SOFI", "Feb-19-2025", "3500", "16.35"),
+            new TransactionSeed("SOUN", "Feb-19-2025", "2500", "11.36"),
+            new TransactionSeed("TMUS", "Nov-17-2021", "0.467", "116.64")
+        );
+
+        int count = 0;
+        for (TransactionSeed seed : seeds) {
             try {
-                StockTicker stockTicker = StockTicker.builder()
-                        .symbol(holding.symbol())
-                        .purchasePrice(holding.purchasePrice())
-                        .quantity(holding.quantity())
+                // Handle comma in quantity (e.g. "5,000")
+                String cleanQty = seed.quantity.replace(",", "");
+                
+                StockTransaction txn = StockTransaction.builder()
                         .userId(userId)
-                        .notes(holding.notes())
-                        .createdAt(now)
-                        .updatedAt(now)
+                        .symbol(seed.symbol)
+                        .type(StockTransaction.TransactionType.BUY)
+                        .transactionDate(LocalDate.parse(seed.date, formatter))
+                        .quantity(new BigDecimal(cleanQty))
+                        .pricePerShare(new BigDecimal(seed.price))
+                        .totalCost(new BigDecimal(cleanQty).multiply(new BigDecimal(seed.price)))
+                        .notes("Historical Import") // Identify these are imported
                         .build();
-                
-                stockRepository.save(stockTicker);
-                savedCount++;
-                totalInvestment = totalInvestment.add(stockTicker.getTotalInvestment());
-                
-                log.debug("Added stock position: {} - {} shares at ${}", 
-                        holding.symbol(), holding.quantity(), holding.purchasePrice());
-                
+
+                transactionRepository.save(txn);
+                count++;
             } catch (Exception e) {
-                log.error("Failed to save stock position {}: {}", holding.symbol(), e.getMessage());
+                log.error("Failed to seed transaction {}: {}", seed, e.getMessage());
             }
         }
-        
-        log.info("Successfully initialized {} stock positions with total investment of ${}", 
-                savedCount, totalInvestment);
-        
-        // Log portfolio summary
-        logPortfolioSummary(userId);
+
+        log.info("Successfully seeded {} stock transactions", count);
     }
-    
-    /**
-     * Log portfolio summary for verification
-     */
-    private void logPortfolioSummary(Long userId) {
-        try {
-            List<StockTicker> holdings = stockRepository.findByUserIdOrderBySymbolAsc(userId);
-            
-            log.info("=== Portfolio Summary for User {} ===", userId);
-            log.info("Total Positions: {}", holdings.size());
-            
-            BigDecimal totalInvestment = BigDecimal.ZERO;
-            for (StockTicker holding : holdings) {
-                BigDecimal investment = holding.getTotalInvestment();
-                totalInvestment = totalInvestment.add(investment);
-                
-                log.info("{}: {} shares @ ${} = ${}", 
-                        holding.getSymbol(), 
-                        holding.getQuantity(), 
-                        holding.getPurchasePrice(),
-                        investment);
-            }
-            
-            log.info("Total Stock Investment: ${}", totalInvestment);
-            log.info("Note: Cash positions and 401k/mutual funds are not included in stock tracking");
-            log.info("=== End Portfolio Summary ===");
-            
-        } catch (Exception e) {
-            log.error("Failed to log portfolio summary: {}", e.getMessage());
-        }
-    }
-    
-    /**
-     * Record class for holding stock data
-     */
-    private record StockHolding(
-            String symbol,
-            BigDecimal purchasePrice,
-            BigDecimal quantity,
-            String notes
-    ) {}
+
+    private record TransactionSeed(String symbol, String date, String quantity, String price) {}
 }
