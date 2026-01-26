@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { cacheService } from './cacheService';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
@@ -35,25 +36,55 @@ class ApiService {
     );
   }
 
-  // Portfolio API
+  // Helper method for cached GET requests
+  private async cachedGet<T>(url: string, cacheKey: string, ttlMs?: number): Promise<T> {
+    // Check cache first
+    const cached = cacheService.get<T>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Fetch from API
+    const response = await this.api.get(url);
+    const data = response.data;
+
+    // Cache the response
+    cacheService.set(cacheKey, data, ttlMs);
+
+    return data;
+  }
+
+  // Portfolio API - with caching
   async getPortfolio(detailed = false) {
-    const response = await this.api.get(`/portfolio?detailed=${detailed}`);
-    return response.data;
+    const cacheKey = `portfolio-${detailed}`;
+    return this.cachedGet(`/portfolio?detailed=${detailed}`, cacheKey, 2 * 60 * 1000); // 2 minutes
+  }
+
+  async getCompletePortfolio(detailed = true) {
+    const cacheKey = `complete-portfolio-${detailed}`;
+    return this.cachedGet(`/portfolio/complete?detailed=${detailed}`, cacheKey, 2 * 60 * 1000); // 2 minutes
   }
 
   async refreshPortfolio() {
+    // Clear portfolio cache when refreshing
+    cacheService.delete('portfolio-true');
+    cacheService.delete('portfolio-false');
+    cacheService.delete('complete-portfolio-true');
+    cacheService.delete('complete-portfolio-false');
+    cacheService.delete('holdings');
+
     const response = await this.api.post('/portfolio/refresh');
     return response.data;
   }
 
   async getPortfolioPerformance(period = '1d') {
-    const response = await this.api.get(`/portfolio/performance?period=${period}`);
-    return response.data;
+    const cacheKey = `portfolio-performance-${period}`;
+    return this.cachedGet(`/portfolio/performance?period=${period}`, cacheKey, 1 * 60 * 1000); // 1 minute
   }
 
   async getHoldings() {
-    const response = await this.api.get('/portfolio/holdings');
-    return response.data;
+    const cacheKey = 'holdings';
+    return this.cachedGet('/portfolio/holdings', cacheKey, 2 * 60 * 1000); // 2 minutes
   }
 
   async addHolding(holding: any) {
@@ -81,7 +112,7 @@ class ApiService {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    
+
     const response = await this.api.get(`/calendar/events?${params.toString()}`);
     return response.data;
   }
@@ -101,10 +132,10 @@ class ApiService {
     return response.data;
   }
 
-  // Content API
+  // Content API - with caching for read operations
   async getPosts(page = 0, size = 10) {
-    const response = await this.api.get(`/content/posts?page=${page}&size=${size}`);
-    return response.data;
+    const cacheKey = `posts-${page}-${size}`;
+    return this.cachedGet(`/content/posts/paginated?page=${page}&size=${size}`, cacheKey, 1 * 60 * 1000); // 1 minute
   }
 
   async createPost(post: any) {
@@ -123,13 +154,61 @@ class ApiService {
   }
 
   async getQuickFacts() {
-    const response = await this.api.get('/content/quick-facts');
+    const cacheKey = 'quick-facts';
+    return this.cachedGet('/content/facts', cacheKey, 30 * 1000); // 30 seconds
+  }
+
+  async getQuickFactDetails(key: string) {
+    const cacheKey = `quick-fact-details-${key}`;
+    return this.cachedGet(`/content/facts/${key}/details`, cacheKey, 5 * 60 * 1000); // 5 minutes
+  }
+
+  async updateQuickFacts(fact: { key: string; value: string; category?: string }) {
+    // Clear cache when updating
+    cacheService.delete('quick-facts');
+    cacheService.delete(`quick-fact-details-${fact.key}`);
+
+    const response = await this.api.post('/content/facts', fact);
     return response.data;
   }
 
-  async updateQuickFacts(facts: any) {
-    const response = await this.api.put('/content/quick-facts', facts);
+  async enrichQuickFact(key: string) {
+    // Clear cache when enriching
+    cacheService.delete('quick-facts');
+    cacheService.delete(`quick-fact-details-${key}`);
+
+    const response = await this.api.post(`/content/facts/${key}/enrich`);
     return response.data;
+  }
+
+  async deleteQuickFact(key: string) {
+    // Clear cache when deleting
+    cacheService.delete('quick-facts');
+    cacheService.delete(`quick-fact-details-${key}`);
+
+    const response = await this.api.delete(`/content/facts/${key}`);
+    return response.data;
+  }
+
+  // Cache management
+  clearCache(pattern?: string) {
+    if (pattern) {
+      // Clear specific cache entries matching pattern
+      const stats = cacheService.getStats();
+      stats.entries.forEach(entry => {
+        if (entry.key.includes(pattern)) {
+          cacheService.delete(entry.key);
+        }
+      });
+    } else {
+      // Clear all cache
+      cacheService.clear();
+    }
+  }
+
+  // Clear cache for a specific key
+  clearCacheKey(key: string) {
+    cacheService.delete(key);
   }
 
   async getMediaActivities(type?: string) {
@@ -154,13 +233,121 @@ class ApiService {
   }
 
   // Chat API
-  async sendChatMessage(message: string) {
-    const response = await this.api.post('/chat', { message });
+  async sendChatMessage(message: string, sessionId?: string) {
+    const response = await this.api.post('/chat', {
+      message,
+      sessionId: sessionId || 'dashboard-session'
+    });
     return response.data;
   }
 
-  async getChatHistory() {
-    const response = await this.api.get('/chat/history');
+  async getChatHistory(sessionId?: string) {
+    const response = await this.api.get(`/chat/history/${sessionId || 'dashboard-session'}`);
+    return response.data;
+  }
+
+  // Life Log API
+  async getLifeLogEntries(type?: string, status?: string, page = 0, size = 10) {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (status) params.append('status', status);
+    params.append('page', page.toString());
+    params.append('size', size.toString());
+
+    const response = await this.api.get(`/lifelog/paginated?${params.toString()}`);
+    return response.data;
+  }
+
+  async getLifeLogEntry(id: number) {
+    const response = await this.api.get(`/lifelog/${id}`);
+    return response.data;
+  }
+
+  async createLifeLogEntry(entry: any) {
+    const response = await this.api.post('/lifelog', entry);
+    return response.data;
+  }
+
+  async updateLifeLogEntry(id: number, entry: any) {
+    const response = await this.api.put(`/lifelog/${id}`, entry);
+    return response.data;
+  }
+
+  async deleteLifeLogEntry(id: number) {
+    const response = await this.api.delete(`/lifelog/${id}`);
+    return response.data;
+  }
+
+  async getLifeLogTimeline() {
+    const response = await this.api.get('/lifelog/timeline');
+    return response.data;
+  }
+
+  async getActiveLifeLogEntries() {
+    const response = await this.api.get('/lifelog/active');
+    return response.data;
+  }
+
+  async searchMetadata(query: string, type: string) {
+    const response = await this.api.get(`/lifelog/search-metadata?q=${encodeURIComponent(query)}&type=${type}`);
+    return response.data;
+  }
+
+  // Digital Garden API
+  async getGardenNotes(growthStage?: string) {
+    const params = growthStage ? `?growthStage=${growthStage}` : '';
+    const response = await this.api.get(`/garden${params}`);
+    return response.data;
+  }
+
+  async getGardenNote(id: number) {
+    const response = await this.api.get(`/garden/${id}`);
+    return response.data;
+  }
+
+  async createGardenNote(note: any) {
+    const response = await this.api.post('/garden', note);
+    return response.data;
+  }
+
+  async updateGardenNote(id: number, note: any) {
+    const response = await this.api.put(`/garden/${id}`, note);
+    return response.data;
+  }
+
+  async deleteGardenNote(id: number) {
+    const response = await this.api.delete(`/garden/${id}`);
+    return response.data;
+  }
+
+  async linkGardenNoteToLifeLog(noteId: number, lifelogId: number) {
+    const response = await this.api.post(`/garden/${noteId}/link/${lifelogId}`);
+    return response.data;
+  }
+
+  async unlinkGardenNoteFromLifeLog(noteId: number, lifelogId: number) {
+    const response = await this.api.delete(`/garden/${noteId}/link/${lifelogId}`);
+    return response.data;
+  }
+
+  // Life Signals API
+  async getBearsTracker() {
+    const response = await this.api.get('/signals/bears');
+    return response.data;
+  }
+
+  async getBerkeleyCountdown() {
+    const response = await this.api.get('/signals/countdown');
+    return response.data;
+  }
+
+  async getFamilyPulse() {
+    const response = await this.api.get('/signals/family');
+    return response.data;
+  }
+
+  async updateFamilyMember(id: number, member: any) {
+    const response = await this.api.put(`/signals/family/${id}`, member);
     return response.data;
   }
 }

@@ -326,3 +326,50 @@ This implementation plan converts the Content Management design into discrete co
 - External API integration provides automated metadata fetching for books (OpenLibrary) and movies/TV (TMDB free tier)
 - Image processing supports social media-style posts with multiple images and captions
 - Media & activities tracker supports comprehensive tracking across books, movies, TV shows, podcasts, music, magazines, and trips
+
+- [x] 14. Implement Quick Facts Metadata Display Modal
+  - [x] 14.1 Create QuickFactMetadataModal component
+    - Create React modal component for displaying enriched metadata
+    - Add category-specific formatting for different metadata types (books, movies, music, etc.)
+    - Implement responsive design for various screen sizes
+    - _Requirements: 10.2, 10.3_
+
+  - [x] 14.2 Add metadata icon to QuickFact display components
+    - Add clickable metadata icon next to quick facts with enriched data
+    - Implement conditional rendering based on metadata availability
+    - Add hover states and accessibility features for the metadata icon
+    - _Requirements: 10.1, 10.5_
+
+  - [x] 14.3 Integrate metadata modal with QuickFact components
+    - Connect metadata icon click to modal opening functionality
+    - Pass enriched metadata to modal component for display
+    - Implement modal close functionality and state management
+    - _Requirements: 10.4_
+
+  - [x] 14.4 Add metadata formatting and display logic
+    - Create category-specific metadata formatters (book: author, publication year; movie: director, release year, etc.)
+    - Add fallback display for missing or incomplete metadata
+    - Implement proper data sanitization and error handling for metadata display
+    - _Requirements: 10.3_
+
+  - [ ]* 14.5 Write property test for metadata icon display for enriched facts
+    - **Property 28: Metadata icon display for enriched facts**
+    - **Validates: Requirements 10.1**
+
+  - [ ]* 14.6 Write property test for metadata modal display and formatting
+    - **Property 29: Metadata modal display and formatting**
+    - **Validates: Requirements 10.2, 10.3**
+
+  - [ ]* 14.7 Write property test for metadata modal close functionality
+    - **Property 30: Metadata modal close functionality**
+    - **Validates: Requirements 10.4**
+
+  - [ ]* 14.8 Write property test for conditional metadata icon visibility
+    - **Property 31: Conditional metadata icon visibility**
+    - **Validates: Requirements 10.5**
+
+- [x] 15. Final checkpoint - Complete content management with metadata display
+  - Ensure all tests pass, ask the user if questions arise.
+  - Verify metadata modal functionality works with all enriched quick fact types
+  - Test metadata display formatting for books, movies, music, and other categories
+  - Validate modal accessibility and responsive design across different devices

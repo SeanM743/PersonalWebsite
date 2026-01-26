@@ -24,7 +24,7 @@ public class BookMetadata {
     private String isbn;
     
     @JsonProperty("cover_i")
-    private String coverId;
+    private Long coverId;
     
     private String coverUrl;
     
@@ -58,7 +58,7 @@ public class BookMetadata {
             return coverUrl;
         }
         if (coverId != null) {
-            return String.format("https://covers.openlibrary.org/b/id/%s-L.jpg", coverId);
+            return String.format("https://covers.openlibrary.org/b/id/%d-L.jpg", coverId);
         }
         return null;
     }

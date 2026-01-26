@@ -58,9 +58,20 @@ public class SecurityConfig {
                 // Public endpoints
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/prometheus").permitAll()
                 .requestMatchers("/error").permitAll()
+                // WebSocket endpoints
+                .requestMatchers("/ws/**").permitAll()
+                // Monitoring endpoints - allow public read access to health/metrics
+                .requestMatchers("/api/monitoring/health/**").permitAll()
+                .requestMatchers("/api/monitoring/metrics/**").permitAll()
+                .requestMatchers("/api/prometheus/**").permitAll()
+                // Write operations on monitoring require authentication
+                .requestMatchers("/api/monitoring/**").authenticated()
                 // Content endpoints - allow guest access for now, will be refined later
                 .requestMatchers("/api/content/**").permitAll()
+                // Chat endpoints - allow guest access for dashboard chat
+                .requestMatchers("/api/chat/**").permitAll()
                 // Admin-only endpoints (future use)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // All other endpoints require authentication
@@ -71,10 +82,13 @@ public class SecurityConfig {
         return http.build();
     }
     
+    @org.springframework.beans.factory.annotation.Value("${security.cors.allowed-origins}")
+    private String allowedOrigins;
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:3000", "http://localhost:5173"));
+        configuration.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

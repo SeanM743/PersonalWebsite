@@ -311,8 +311,9 @@ public class MarketDataScheduler {
     
     /**
      * Fixed-rate fallback scheduler (runs every 5 minutes as backup)
+     * DISABLED: Commented out to prevent automatic API calls
      */
-    @Scheduled(fixedRate = 300000) // 5 minutes
+    // @Scheduled(fixedRate = 300000) // 5 minutes
     public void fallbackScheduledUpdate() {
         if (!schedulerEnabled || !isRunning.get()) {
             return;
@@ -328,8 +329,9 @@ public class MarketDataScheduler {
     
     /**
      * Warm cache during market open
+     * DISABLED: Commented out to prevent automatic API calls
      */
-    @Scheduled(cron = "0 25 9 * * MON-FRI", zone = "America/New_York") // 9:25 AM ET on weekdays
+    // @Scheduled(cron = "0 25 9 * * MON-FRI", zone = "America/New_York") // 9:25 AM ET on weekdays
     public void warmCacheBeforeMarketOpen() {
         if (!schedulerEnabled) {
             return;

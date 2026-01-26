@@ -3,12 +3,8 @@ import { apiService } from '../services/apiService';
 import { useNotification } from '../contexts/NotificationContext';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import { 
-  Plus, 
-  RefreshCw, 
   TrendingUp, 
-  TrendingDown, 
-  Edit, 
-  Trash2,
+  TrendingDown,
   DollarSign
 } from 'lucide-react';
 
@@ -18,6 +14,10 @@ interface Holding {
   quantity: number;
   purchasePrice: number;
   totalInvestment: number;
+  currentPrice?: number;
+  currentValue?: number;
+  totalGainLoss?: number;
+  totalGainLossPercentage?: number;
   notes?: string;
 }
 
@@ -32,40 +32,52 @@ interface PortfolioSummary {
   stockPerformances: any[];
 }
 
+interface CompletePortfolioSummary {
+  stockPortfolio: PortfolioSummary;
+  staticHoldings: {
+    totalCash: number;
+    totalRetirement: number;
+    totalOtherPortfolios: number;
+    totalStaticValue: number;
+    holdings: any[];
+  };
+  totalPortfolioValue: number;
+  totalCashValue: number;
+  totalStockValue: number;
+  totalRetirementValue: number;
+  totalOtherInvestments: number;
+  allocationByType: Record<string, number>;
+  allocationByAssetClass: Record<string, number>;
+  lastUpdated: string;
+  currency: string;
+  notes: string[];
+}
+
 const Portfolio: React.FC = () => {
-  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
+  const [completePortfolio, setCompletePortfolio] = useState<CompletePortfolioSummary | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingHolding, setEditingHolding] = useState<Holding | null>(null);
-  const { error, success } = useNotification();
+  const [selectedPeriod, setSelectedPeriod] = useState('6M');
+  const { error } = useNotification();
 
-  const loadPortfolioData = async (showRefreshMessage = false) => {
+  const loadPortfolioData = async () => {
     try {
-      setIsRefreshing(true);
-      
-      const [portfolioRes, holdingsRes] = await Promise.all([
-        apiService.getPortfolio(true),
+      const [completeRes, holdingsRes] = await Promise.all([
+        apiService.getCompletePortfolio(true),
         apiService.getHoldings(),
       ]);
 
-      if (portfolioRes.success) {
-        setPortfolio(portfolioRes.data);
+      if (completeRes.success) {
+        setCompletePortfolio(completeRes.data);
       }
       
       if (holdingsRes.success) {
         setHoldings(holdingsRes.data);
       }
-      
-      if (showRefreshMessage) {
-        success('Portfolio refreshed successfully');
-      }
     } catch (err: any) {
       error('Failed to load portfolio', err.message);
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   };
 
@@ -73,26 +85,17 @@ const Portfolio: React.FC = () => {
     loadPortfolioData();
   }, []);
 
-  const handleRefresh = async () => {
-    try {
-      await apiService.refreshPortfolio();
-      await loadPortfolioData(true);
-    } catch (err: any) {
-      error('Failed to refresh portfolio', err.message);
-    }
-  };
+  // Calculate top holding by current value
+  const topHolding = holdings.reduce((prev, current) => {
+    if (!prev) return current;
+    const prevValue = prev.currentValue || prev.totalInvestment;
+    const currentValue = current.currentValue || current.totalInvestment;
+    return (currentValue > prevValue) ? current : prev;
+  }, holdings[0]);
 
-  const handleDeleteHolding = async (symbol: string) => {
-    if (!confirm(`Are you sure you want to delete ${symbol}?`)) return;
-    
-    try {
-      await apiService.deleteHolding(symbol);
-      success('Holding deleted successfully');
-      loadPortfolioData();
-    } catch (err: any) {
-      error('Failed to delete holding', err.message);
-    }
-  };
+  // Calculate portfolio percentage for top holding
+  const topHoldingPercentage = topHolding && completePortfolio ? 
+    ((topHolding.currentValue || topHolding.totalInvestment) / completePortfolio.totalStockValue * 100).toFixed(1) : '0';
 
   if (isLoading) {
     return (
@@ -103,334 +106,185 @@ const Portfolio: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Portfolio</h1>
-        <div className="flex space-x-3">
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="btn-primary flex items-center space-x-2"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Stock</span>
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="btn-secondary flex items-center space-x-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh</span>
-          </button>
+    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+      {/* Top Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Total Portfolio Value */}
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center text-gray-500 text-sm mb-1">
+                <DollarSign className="h-4 w-4 mr-1" />
+                Total Portfolio Value
+              </div>
+              <div className="text-2xl font-bold text-gray-900">
+                ${completePortfolio?.totalPortfolioValue?.toLocaleString('en-US', { 
+                  minimumFractionDigits: 0, 
+                  maximumFractionDigits: 0 
+                }) || '0'}
+              </div>
+              <div className="flex items-center text-green-600 text-sm mt-1">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                Current Value
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* Portfolio Summary */}
-      {portfolio && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Value</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${portfolio.currentValue?.toFixed(2) || '0.00'}
-                </p>
+        {/* Total Gain/Loss */}
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center text-gray-500 text-sm mb-1">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                Total Gain/Loss
               </div>
-              <DollarSign className="h-8 w-8 text-blue-500" />
+              <div className="text-2xl font-bold text-gray-900">
+                ${completePortfolio?.stockPortfolio?.totalGainLoss?.toLocaleString('en-US', { 
+                  minimumFractionDigits: 0, 
+                  maximumFractionDigits: 0 
+                }) || '0'}
+              </div>
+              <div className="text-gray-500 text-sm mt-1">
+                Stocks only
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Gain/Loss</p>
-                <p className={`text-2xl font-bold ${
-                  (portfolio.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {(portfolio.totalGainLoss || 0) >= 0 ? '+' : ''}
-                  ${portfolio.totalGainLoss?.toFixed(2) || '0.00'}
-                </p>
+        {/* Top Holding */}
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center text-gray-500 text-sm mb-1">
+                <div className="w-4 h-4 rounded-full bg-blue-500 mr-1"></div>
+                Top Holding
               </div>
-              {(portfolio.totalGainLoss || 0) >= 0 ? (
-                <TrendingUp className="h-8 w-8 text-green-500" />
-              ) : (
-                <TrendingDown className="h-8 w-8 text-red-500" />
-              )}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Daily Change</p>
-                <p className={`text-2xl font-bold ${
-                  (portfolio.dailyChange || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {(portfolio.dailyChange || 0) >= 0 ? '+' : ''}
-                  ${portfolio.dailyChange?.toFixed(2) || '0.00'}
-                </p>
+              <div className="text-2xl font-bold text-gray-900">
+                {topHolding?.symbol || 'N/A'}
               </div>
-              {(portfolio.dailyChange || 0) >= 0 ? (
-                <TrendingUp className="h-8 w-8 text-green-500" />
-              ) : (
-                <TrendingDown className="h-8 w-8 text-red-500" />
-              )}
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Positions</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {portfolio.totalPositions || 0}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
-                <span className="text-purple-600 font-bold">
-                  {portfolio.totalPositions || 0}
-                </span>
+              <div className="text-gray-500 text-sm mt-1">
+                {topHoldingPercentage}% of stocks
               </div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Holdings Table */}
-      <div className="card">
+      {/* Portfolio Performance Section */}
+      <div className="bg-white rounded-lg p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Holdings</h2>
-          <div className="text-sm text-gray-500">
-            {holdings.length} position{holdings.length !== 1 ? 's' : ''}
+          <h2 className="text-lg font-semibold text-gray-900">Portfolio Performance</h2>
+          <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+            {['1M', '3M', '6M', '1Y'].map((period) => (
+              <button
+                key={period}
+                onClick={() => setSelectedPeriod(period)}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  selectedPeriod === period
+                    ? 'bg-blue-500 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {/* Performance metrics grid - using available data */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-4 bg-gray-50 rounded-lg">
+            <div className="text-2xl font-bold text-gray-600">N/A</div>
+            <div className="text-sm text-gray-500">This Month</div>
+          </div>
+          <div className="text-center p-4 bg-gray-50 rounded-lg">
+            <div className="text-2xl font-bold text-gray-600">N/A</div>
+            <div className="text-sm text-gray-500">This Quarter</div>
+          </div>
+          <div className="text-center p-4 bg-gray-50 rounded-lg">
+            <div className={`text-2xl font-bold ${
+              (completePortfolio?.stockPortfolio?.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {completePortfolio?.stockPortfolio?.totalGainLossPercentage ? 
+                `${(completePortfolio.stockPortfolio.totalGainLossPercentage >= 0 ? '+' : '')}${completePortfolio.stockPortfolio.totalGainLossPercentage.toFixed(1)}%` : 
+                'N/A'
+              }
+            </div>
+            <div className="text-sm text-gray-500">Total Return</div>
+          </div>
+          <div className="text-center p-4 bg-gray-50 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600">{holdings.length}</div>
+            <div className="text-sm text-gray-500">Total Positions</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Asset Allocation - Replace pie chart with allocation bars */}
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Asset Allocation</h3>
+          <div className="space-y-4">
+            {completePortfolio?.allocationByType && Object.entries(completePortfolio.allocationByType).map(([type, value]) => {
+              const percentage = ((value / completePortfolio.totalPortfolioValue) * 100);
+              const colors = {
+                'Stocks': 'bg-blue-500',
+                'Cash': 'bg-green-500', 
+                'Retirement': 'bg-purple-500',
+                'Other Investments': 'bg-orange-500'
+              };
+              
+              return (
+                <div key={type} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-3 h-3 rounded-full ${colors[type as keyof typeof colors] || 'bg-gray-400'}`}></div>
+                    <span className="text-sm font-medium text-gray-700">{type}</span>
+                    <span className="text-sm text-gray-500">{percentage.toFixed(0)}%</span>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900">
+                    ${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {holdings.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Symbol
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Purchase Price
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Investment
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {holdings.map((holding) => (
-                  <tr key={holding.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+        {/* Top Holdings */}
+        <div className="bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Holdings</h3>
+          <div className="space-y-3">
+            {holdings
+              .sort((a, b) => (b.currentValue || b.totalInvestment) - (a.currentValue || a.totalInvestment))
+              .slice(0, 5)
+              .map((holding) => {
+                const currentValue = holding.currentValue || holding.totalInvestment;
+                const gainLoss = holding.totalGainLoss || 0;
+                const gainLossPercentage = holding.totalGainLossPercentage || 0;
+                const isPositive = gainLoss >= 0;
+                
+                return (
+                  <div key={holding.symbol} className="flex items-center justify-between py-2">
+                    <div>
                       <div className="font-medium text-gray-900">{holding.symbol}</div>
-                      {holding.notes && (
-                        <div className="text-sm text-gray-500">{holding.notes}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {holding.quantity}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${holding.purchasePrice?.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      ${holding.totalInvestment?.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => setEditingHolding(holding)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteHolding(holding.symbol)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                      <div className="text-sm text-gray-500">
+                        {holding.quantity.toLocaleString()} shares
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-semibold text-gray-900">
+                        ${currentValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className={`text-sm flex items-center justify-end ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                        {isPositive ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                        {isPositive ? '+' : ''}{gainLossPercentage.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
-        ) : (
-          <div className="text-center py-12">
-            <TrendingUp className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No holdings</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Get started by adding your first stock position.
-            </p>
-            <div className="mt-6">
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="btn-primary"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Stock
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Add/Edit Modal would go here */}
-      {(showAddModal || editingHolding) && (
-        <HoldingModal
-          holding={editingHolding}
-          onClose={() => {
-            setShowAddModal(false);
-            setEditingHolding(null);
-          }}
-          onSave={() => {
-            setShowAddModal(false);
-            setEditingHolding(null);
-            loadPortfolioData();
-          }}
-        />
-      )}
-    </div>
-  );
-};
-
-// Simple modal component for adding/editing holdings
-const HoldingModal: React.FC<{
-  holding?: Holding | null;
-  onClose: () => void;
-  onSave: () => void;
-}> = ({ holding, onClose, onSave }) => {
-  const [formData, setFormData] = useState({
-    symbol: holding?.symbol || '',
-    quantity: holding?.quantity || '',
-    purchasePrice: holding?.purchasePrice || '',
-    notes: holding?.notes || '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { error, success } = useNotification();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const data = {
-        symbol: formData.symbol.toUpperCase(),
-        quantity: parseFloat(formData.quantity as string),
-        purchasePrice: parseFloat(formData.purchasePrice as string),
-        notes: formData.notes,
-      };
-
-      if (holding) {
-        await apiService.updateHolding(holding.symbol, data);
-        success('Holding updated successfully');
-      } else {
-        await apiService.addHolding(data);
-        success('Holding added successfully');
-      }
-      
-      onSave();
-    } catch (err: any) {
-      error('Failed to save holding', err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose} />
-        
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <form onSubmit={handleSubmit}>
-            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {holding ? 'Edit Holding' : 'Add New Holding'}
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Symbol</label>
-                  <input
-                    type="text"
-                    required
-                    className="input-field mt-1"
-                    value={formData.symbol}
-                    onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
-                    placeholder="AAPL"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Quantity</label>
-                  <input
-                    type="number"
-                    step="0.00000001"
-                    required
-                    className="input-field mt-1"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                    placeholder="10"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Purchase Price</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    className="input-field mt-1"
-                    value={formData.purchasePrice}
-                    onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
-                    placeholder="150.00"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Notes (Optional)</label>
-                  <textarea
-                    className="input-field mt-1"
-                    rows={3}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Any additional notes..."
-                  />
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="btn-primary sm:ml-3 sm:w-auto"
-              >
-                {isSubmitting ? <LoadingSpinner size="small" className="mr-2" /> : null}
-                {holding ? 'Update' : 'Add'} Holding
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="btn-secondary mt-3 sm:mt-0 sm:w-auto"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
         </div>
       </div>
     </div>

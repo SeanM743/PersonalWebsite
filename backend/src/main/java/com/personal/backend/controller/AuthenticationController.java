@@ -13,6 +13,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -95,6 +96,49 @@ public class AuthenticationController {
             log.error("Token validation error: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(AuthResponse.error("Invalid token"));
+        }
+    }
+    
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.debug("No valid authorization header provided for /me endpoint");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(AuthResponse.error("No authorization header provided"));
+            }
+            
+            String token = authHeader.substring(7);
+            
+            // Extract username from token
+            String username = authenticationService.extractUsernameFromToken(token);
+            if (username == null) {
+                log.debug("Failed to extract username from token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(AuthResponse.error("Invalid token"));
+            }
+            
+            // Get user details
+            Optional<User> userOptional = authenticationService.findUserByUsername(username);
+            if (userOptional.isEmpty()) {
+                log.warn("User not found for username: {}", username);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(AuthResponse.error("User not found"));
+            }
+            
+            User user = userOptional.get();
+            
+            // Return user info in the format expected by frontend
+            return ResponseEntity.ok(Map.of(
+                    "id", user.getId(),
+                    "username", user.getUsername(),
+                    "role", user.getRole().toString()
+            ));
+            
+        } catch (Exception e) {
+            log.error("Error getting current user: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(AuthResponse.error("Invalid token"));
         }
     }
 }

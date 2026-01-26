@@ -88,3 +88,27 @@ The Authentication System provides secure user login functionality for the Perso
 3. THE Authentication_System SHALL provide authentication context to other application components
 4. WHEN processing requests, THE Authentication_System SHALL make user authentication status available to controllers
 5. THE Authentication_System SHALL support both JWT and session-based authentication mechanisms
+
+### Requirement 7: Authentication Persistence
+
+**User Story:** As a frontend user, I want to stay logged in when I refresh the page, so that I don't have to re-enter my credentials repeatedly.
+
+#### Acceptance Criteria
+
+1. WHEN a user refreshes the page with a valid stored token, THE Authentication_System SHALL maintain the user's authenticated state
+2. THE Authentication_System SHALL provide a `/api/auth/me` endpoint that returns current user information when given a valid token
+3. WHEN the `/api/auth/me` endpoint receives a valid Authorization header, THE Authentication_System SHALL extract the username from the token and return user details
+4. WHEN the `/api/auth/me` endpoint receives an invalid or missing token, THE Authentication_System SHALL return a 401 unauthorized response
+5. THE Authentication_System SHALL allow frontend applications to validate stored tokens without requiring re-authentication
+
+### Requirement 8: Login Error Handling
+
+**User Story:** As a frontend user, I want clear error messages when login fails, so that I can understand what went wrong without losing my input.
+
+#### Acceptance Criteria
+
+1. WHEN login fails due to invalid credentials, THE Authentication_System SHALL return a descriptive error message without clearing the login form
+2. WHEN login fails due to validation errors, THE Authentication_System SHALL return specific field-level error messages
+3. WHEN login succeeds, THE Authentication_System SHALL return user information along with the authentication token
+4. THE Authentication_System SHALL handle network errors gracefully and provide appropriate user feedback
+5. WHEN authentication errors occur, THE Authentication_System SHALL log security events for monitoring purposes

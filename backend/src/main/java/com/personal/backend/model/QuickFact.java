@@ -29,6 +29,22 @@ public class QuickFact {
     
     private String description;
     
+    // Rich data fields for enhanced functionality
+    @Column(name = "external_id")
+    private String externalId; // ID from external API (e.g., book ISBN, movie TMDB ID)
+    
+    @Column(name = "image_url")
+    private String imageUrl; // Cover art, poster, etc.
+    
+    @Column(name = "metadata", columnDefinition = "TEXT")
+    private String metadata; // JSON string for additional data
+    
+    @Column(name = "source_url")
+    private String sourceUrl; // Link to external source
+    
+    @Column(name = "is_enriched")
+    private Boolean isEnriched = false; // Whether data has been fetched from external APIs
+    
     @PrePersist
     @PreUpdate
     protected void onUpdate() {

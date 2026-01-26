@@ -2,6 +2,7 @@ package com.personal.backend.controller;
 
 import com.personal.backend.dto.PortfolioResponse;
 import com.personal.backend.dto.PortfolioSummary;
+import com.personal.backend.dto.CompletePortfolioSummary;
 import com.personal.backend.dto.StockRequest;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.service.PortfolioService;
@@ -54,6 +55,53 @@ public class PortfolioController {
             
         } catch (Exception e) {
             log.error("Error getting portfolio: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Get complete portfolio including stocks, cash, and retirement accounts
+     * GET /api/portfolio/complete
+     */
+    @GetMapping("/complete")
+    public ResponseEntity<PortfolioResponse<CompletePortfolioSummary>> getCompletePortfolio(
+            @RequestParam(value = "detailed", defaultValue = "true") boolean detailed,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            log.info("Getting complete portfolio for user {} (detailed: {})", userId, detailed);
+            
+            // Get stock portfolio summary
+            PortfolioResponse<PortfolioSummary> stockResponse = detailed ? 
+                    portfolioService.getDetailedPortfolioSummary(userId) :
+                    portfolioService.getPortfolioSummary(userId);
+            
+            if (!stockResponse.isSuccess()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(PortfolioResponse.error("Failed to get stock portfolio: " + stockResponse.getError()));
+            }
+            
+            // Create complete portfolio with static holdings
+            CompletePortfolioSummary completePortfolio = CompletePortfolioSummary.createWithStaticHoldings(
+                    stockResponse.getData());
+            
+            PortfolioResponse<CompletePortfolioSummary> response = PortfolioResponse.success(
+                    completePortfolio, 
+                    "Complete portfolio retrieved successfully",
+                    Map.of(
+                        "includesStaticHoldings", true,
+                        "totalValue", completePortfolio.getTotalPortfolioValue(),
+                        "stockPositions", completePortfolio.getStockPortfolio().getTotalPositions(),
+                        "staticPositions", completePortfolio.getStaticHoldings().getHoldings().size()
+                    )
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error getting complete portfolio: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
         }

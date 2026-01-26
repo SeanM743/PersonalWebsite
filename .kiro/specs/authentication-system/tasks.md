@@ -72,17 +72,31 @@ This implementation plan converts the authentication system design into discrete
     - Add proper HTTP status codes and error handling
     - _Requirements: 5.1, 5.2, 5.3, 5.4_
 
-  - [ ] 5.3 Write property test for valid credential authentication
+  - [x] 5.3 Add /me endpoint for authentication persistence
+    - Implement GET /api/auth/me endpoint
+    - Extract username from JWT token and return user information
+    - Handle invalid/missing tokens with 401 responses
+    - _Requirements: 7.2, 7.3, 7.4_
+
+  - [ ] 5.4 Write property test for valid credential authentication
     - **Property 1: Valid credential authentication**
     - **Validates: Requirements 1.1, 5.2**
 
-  - [ ] 5.4 Write property test for invalid credential rejection
+  - [ ] 5.5 Write property test for invalid credential rejection
     - **Property 2: Invalid credential rejection**
     - **Validates: Requirements 1.2, 5.3**
 
-  - [ ] 5.5 Write property test for malformed request validation
+  - [ ] 5.6 Write property test for malformed request validation
     - **Property 3: Malformed request validation**
     - **Validates: Requirements 1.3, 5.4**
+
+  - [ ] 5.7 Write property test for token-based user information retrieval
+    - **Property 5: Token-based user information retrieval**
+    - **Validates: Requirements 7.2, 7.3**
+
+  - [ ] 5.8 Write property test for invalid token rejection for user info
+    - **Property 6: Invalid token rejection for user info**
+    - **Validates: Requirements 7.4**
 
 - [ ] 6. Checkpoint - Basic authentication functionality complete
   - Ensure all tests pass, ask the user if questions arise.
@@ -107,11 +121,11 @@ This implementation plan converts the authentication system design into discrete
     - _Requirements: 6.1, 6.2_
 
   - [ ] 8.2 Write property test for guest user access control
-    - **Property 5: Guest user access control**
+    - **Property 8: Guest user access control**
     - **Validates: Requirements 2.1, 6.2**
 
   - [ ] 8.3 Write property test for admin user access control
-    - **Property 6: Admin user access control**
+    - **Property 9: Admin user access control**
     - **Validates: Requirements 2.2, 6.2**
 
 - [ ] 9. Add comprehensive error handling and validation
@@ -119,32 +133,44 @@ This implementation plan converts the authentication system design into discrete
     - Handle authentication failures with proper HTTP status codes
     - Add validation error responses for malformed requests
     - Include security logging for authentication attempts
-    - _Requirements: 1.2, 1.3_
+    - _Requirements: 1.2, 1.3, 8.1, 8.2, 8.5_
 
   - [ ] 9.2 Write property test for API format consistency
-    - **Property 9: API format consistency**
+    - **Property 12: API format consistency**
     - **Validates: Requirements 5.1, 5.5**
 
   - [ ] 9.3 Write property test for password hash confidentiality
-    - **Property 11: Password hash confidentiality**
+    - **Property 14: Password hash confidentiality**
     - **Validates: Requirements 4.4**
 
-- [ ] 10. Integration and database setup
-  - [x] 10.1 Create database initialization and default user setup
+- [ ] 10. Frontend integration for authentication persistence
+  - [x] 10.1 Verify frontend AuthContext integration
+    - Ensure frontend calls /api/auth/me on app initialization
+    - Verify token storage and retrieval from localStorage
+    - Test authentication state persistence across page refreshes
+    - _Requirements: 7.1, 7.5_
+
+  - [ ] 10.2 Write property test for authentication state persistence
+    - **Property 7: Authentication state persistence**
+    - **Validates: Requirements 7.1, 7.5**
+
+- [ ] 11. Integration and database setup
+  - [x] 11.1 Create database initialization and default user setup
     - Add data.sql or configuration for default admin user
     - Ensure PostgreSQL database persistence is working correctly
     - Test database connectivity and schema creation
     - _Requirements: 4.1, 4.5_
 
-  - [x] 10.2 Write integration tests for complete authentication flow
+  - [x] 11.2 Write integration tests for complete authentication flow
     - Test end-to-end login process from HTTP request to JWT response
     - Verify database persistence and PostgreSQL storage
     - Test Spring Security filter chain integration
 
-- [x] 11. Final checkpoint - Complete authentication system
+- [x] 12. Final checkpoint - Complete authentication system
   - Ensure all tests pass, ask the user if questions arise.
   - Verify JWT authentication works with protected endpoints
   - Test guest vs admin access differentiation
+  - Verify authentication persistence across page refreshes
 
 ## Notes
 

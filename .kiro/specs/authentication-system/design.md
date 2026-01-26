@@ -43,8 +43,10 @@ The architecture implements a layered security approach:
 
 **AuthenticationController**
 - Handles `/api/auth/login` endpoint
+- Handles `/api/auth/me` endpoint for current user information
 - Validates login requests and returns JWT tokens
 - Manages authentication error responses
+- Extracts user information from JWT tokens
 
 **JwtAuthenticationFilter**
 - Custom Spring Security filter for JWT validation
@@ -182,41 +184,55 @@ spring.jpa.properties.hibernate.format_sql=true
 *For any* password provided during user creation, the stored password hash should never equal the plaintext password and should be generated using a secure hashing algorithm
 **Validates: Requirements 1.4, 1.5, 4.3**
 
+### Authentication Persistence Properties
+
+**Property 5: Token-based user information retrieval**
+*For any* valid JWT token, the `/api/auth/me` endpoint should extract the username from the token and return the corresponding user information
+**Validates: Requirements 7.2, 7.3**
+
+**Property 6: Invalid token rejection for user info**
+*For any* invalid, expired, or missing JWT token, the `/api/auth/me` endpoint should return a 401 unauthorized response
+**Validates: Requirements 7.4**
+
+**Property 7: Authentication state persistence**
+*For any* valid stored JWT token, the frontend should be able to restore user authentication state without requiring re-login
+**Validates: Requirements 7.1, 7.5**
+
 ### Authorization Properties
 
-**Property 5: Guest user access control**
+**Property 8: Guest user access control**
 *For any* request made without authentication credentials, the system should allow access to public endpoints but reject access to protected endpoints
 **Validates: Requirements 2.1, 6.2**
 
-**Property 6: Admin user access control**
+**Property 9: Admin user access control**
 *For any* request made with valid admin authentication, the system should allow access to all endpoints including protected AI agent tools
 **Validates: Requirements 2.2, 6.2**
 
-**Property 7: Token validation consistency**
+**Property 10: Token validation consistency**
 *For any* JWT token (valid, invalid, expired, or malformed), the authentication system should consistently validate the token and reject invalid/expired tokens with 401 status across all protected endpoints
 **Validates: Requirements 2.3, 2.4, 3.3**
 
 ### Token Management Properties
 
-**Property 8: JWT token structure**
+**Property 11: JWT token structure**
 *For any* generated JWT token, it should contain an expiration time, user role information, and be properly signed with the configured secret
 **Validates: Requirements 2.5, 3.1**
 
-**Property 9: API format consistency**
-*For any* request to the login endpoint, it should accept JSON input and return JSON output with appropriate HTTP status codes
+**Property 12: API format consistency**
+*For any* request to authentication endpoints, they should accept JSON input and return JSON output with appropriate HTTP status codes
 **Validates: Requirements 5.1, 5.5**
 
 ### Data Persistence Properties
 
-**Property 10: Username uniqueness enforcement**
+**Property 13: Username uniqueness enforcement**
 *For any* attempt to create a user with an existing username, the system should reject the creation and maintain database integrity
 **Validates: Requirements 4.2**
 
-**Property 11: Password hash confidentiality**
+**Property 14: Password hash confidentiality**
 *For any* API response containing user data, password hashes should never be included in the response payload
 **Validates: Requirements 4.4**
 
-**Property 12: Authentication context availability**
+**Property 15: Authentication context availability**
 *For any* authenticated request to a protected endpoint, the Spring Security authentication context should be properly populated and available to controllers
 **Validates: Requirements 6.3**
 

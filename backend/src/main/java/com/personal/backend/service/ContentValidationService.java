@@ -2,6 +2,7 @@ package com.personal.backend.service;
 
 import com.personal.backend.dto.*;
 import org.jsoup.Jsoup;
+import org.jsoup.parser.Parser;
 import org.jsoup.safety.Safelist;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -191,9 +192,12 @@ public class ContentValidationService {
         }
         
         // Remove potentially harmful content while preserving basic formatting
-        return Jsoup.clean(input, Safelist.basicWithImages()
+        String cleaned = Jsoup.clean(input, Safelist.basicWithImages()
                 .addTags("br", "p", "strong", "em", "u")
                 .addAttributes("img", "alt", "title"));
+        
+        // Unescape entities to prevent double-escaping on frontend (e.g. &amp; -> &)
+        return Parser.unescapeEntities(cleaned, true);
     }
     
     public String sanitizeHtml(String html) {

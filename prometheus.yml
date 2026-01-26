@@ -1,0 +1,14 @@
+global:
+  scrape_interval: 15s  # How frequently to scrape targets
+  evaluation_interval: 15s  # How frequently to evaluate rules
+
+# Scrape configurations
+scrape_configs:
+  # Spring Boot Application
+  - job_name: 'personal-dashboard'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['172.27.220.234:8080']  # WSL2 host IP
+        labels:
+          application: 'personal-dashboard'
+          environment: 'local'

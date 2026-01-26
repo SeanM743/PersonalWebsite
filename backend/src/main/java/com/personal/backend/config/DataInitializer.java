@@ -1,125 +1,57 @@
 package com.personal.backend.config;
 
-import com.personal.backend.dto.StockRequest;
-import com.personal.backend.model.Role;
-import com.personal.backend.service.AuthenticationService;
-import com.personal.backend.service.StockHoldingService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import com.personal.backend.model.FamilyMember;
+import com.personal.backend.repository.FamilyMemberRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Component
-@RequiredArgsConstructor
-@Slf4j
 public class DataInitializer implements CommandLineRunner {
-    
-    private final AuthenticationService authenticationService;
-    private final StockHoldingService stockHoldingService;
-    
+
+    @Autowired
+    private FamilyMemberRepository familyMemberRepository;
+
     @Override
     public void run(String... args) throws Exception {
-        initializeDefaultUsers();
-        initializePortfolioStocks();
+        initializeFamilyMembers();
     }
-    
-    private void initializeDefaultUsers() {
-        try {
-            // Create or update default admin user
-            if (!authenticationService.userExists("admin")) {
-                authenticationService.createUser("admin", "default123", Role.ADMIN);
-                log.info("Created default admin user");
-            } else {
-                // Update existing admin user password
-                try {
-                    authenticationService.updateUserPassword("admin", "default123");
-                    log.info("Updated admin user password");
-                } catch (Exception e) {
-                    log.warn("Could not update admin password: {}", e.getMessage());
-                }
-                log.info("Default admin user already exists");
-            }
-            
-            // Create or update default guest user
-            if (!authenticationService.userExists("guest")) {
-                authenticationService.createUser("guest", "default123", Role.GUEST);
-                log.info("Created default guest user");
-            } else {
-                // Update existing guest user password
-                try {
-                    authenticationService.updateUserPassword("guest", "default123");
-                    log.info("Updated guest user password");
-                } catch (Exception e) {
-                    log.warn("Could not update guest password: {}", e.getMessage());
-                }
-                log.info("Default guest user already exists");
-            }
-            
-        } catch (Exception e) {
-            log.error("Error initializing default users: {}", e.getMessage(), e);
+
+    private void initializeFamilyMembers() {
+        // Check if family members already exist
+        if (familyMemberRepository.count() > 0) {
+            return; // Data already initialized
         }
-    }
-    
-    private void initializePortfolioStocks() {
-        try {
-            Long adminUserId = 1L; // Admin user ID
-            
-            // Define your stock positions
-            StockPosition[] positions = {
-                new StockPosition("AMZN", new BigDecimal("150.00"), new BigDecimal("10"), "Amazon - E-commerce and cloud computing giant"),
-                new StockPosition("SOFI", new BigDecimal("8.50"), new BigDecimal("100"), "SoFi Technologies - Digital financial services"),
-                new StockPosition("ANET", new BigDecimal("320.00"), new BigDecimal("5"), "Arista Networks - Cloud networking solutions"),
-                new StockPosition("INTC", new BigDecimal("25.00"), new BigDecimal("50"), "Intel Corporation - Semiconductor manufacturer"),
-                new StockPosition("CRWV", new BigDecimal("15.00"), new BigDecimal("25"), "Crown Electrokinetics - Smart glass technology")
-            };
-            
-            for (StockPosition position : positions) {
-                try {
-                    // Check if stock already exists for this user
-                    var existingStock = stockHoldingService.getStockHolding(adminUserId, position.symbol);
-                    if (!existingStock.isSuccess()) {
-                        // Stock doesn't exist, add it
-                        StockRequest request = new StockRequest();
-                        request.setSymbol(position.symbol);
-                        request.setPurchasePrice(position.purchasePrice);
-                        request.setQuantity(position.quantity);
-                        request.setNotes(position.notes);
-                        
-                        var result = stockHoldingService.addStockHolding(adminUserId, request);
-                        if (result.isSuccess()) {
-                            log.info("Added stock position: {} - {} shares at ${}", 
-                                    position.symbol, position.quantity, position.purchasePrice);
-                        } else {
-                            log.warn("Failed to add stock position {}: {}", position.symbol, result.getError());
-                        }
-                    } else {
-                        log.info("Stock position {} already exists", position.symbol);
-                    }
-                } catch (Exception e) {
-                    log.error("Error adding stock position {}: {}", position.symbol, e.getMessage());
-                }
-            }
-            
-            log.info("Portfolio initialization completed");
-            
-        } catch (Exception e) {
-            log.error("Error initializing portfolio stocks: {}", e.getMessage(), e);
-        }
-    }
-    
-    private static class StockPosition {
-        final String symbol;
-        final BigDecimal purchasePrice;
-        final BigDecimal quantity;
-        final String notes;
-        
-        StockPosition(String symbol, BigDecimal purchasePrice, BigDecimal quantity, String notes) {
-            this.symbol = symbol;
-            this.purchasePrice = purchasePrice;
-            this.quantity = quantity;
-            this.notes = notes;
-        }
+
+        // Initialize Madelyn (WSU)
+        FamilyMember madelyn = new FamilyMember();
+        madelyn.setName("Madelyn");
+        madelyn.setPrimaryActivity("WSU Student");
+        madelyn.setStatus("Doing great at college");
+        madelyn.setNotes("Studying hard and making new friends");
+        madelyn.setUpdatedAt(LocalDateTime.now());
+        familyMemberRepository.save(madelyn);
+
+        // Initialize Evalyn (Driving)
+        FamilyMember evalyn = new FamilyMember();
+        evalyn.setName("Evalyn");
+        evalyn.setPrimaryActivity("Learning to Drive");
+        evalyn.setStatus("Getting more confident behind the wheel");
+        evalyn.setNotes("Practicing parallel parking and highway driving");
+        evalyn.setUpdatedAt(LocalDateTime.now());
+        familyMemberRepository.save(evalyn);
+
+        // Initialize Nate (School/Sports)
+        FamilyMember nate = new FamilyMember();
+        nate.setName("Nate");
+        nate.setPrimaryActivity("School & Sports");
+        nate.setStatus("Balancing academics and athletics");
+        nate.setNotes("Doing well in classes and enjoying team sports");
+        nate.setUpdatedAt(LocalDateTime.now());
+        familyMemberRepository.save(nate);
+
+        System.out.println("Family Pulse data initialized with 3 family members");
     }
 }

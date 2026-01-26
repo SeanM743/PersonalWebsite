@@ -1,0 +1,130 @@
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@digitalcommandcenter.local'
+  smtp_auth_username: ''
+  smtp_auth_password: ''
+  smtp_require_tls: false
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alerts
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 30m
+      
+    # Warning alerts - less frequent notifications
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      group_wait: 30s
+      repeat_interval: 2h
+      
+    # Service-specific routing
+    - match:
+        service: digital-command-center
+      receiver: 'service-alerts'
+      routes:
+        - match:
+            alertname: ServiceDown
+          receiver: 'critical-alerts'
+          group_wait: 0s
+          repeat_interval: 15m
+          
+        - match:
+            alertname: HighErrorRate
+          receiver: 'critical-alerts'
+          group_wait: 5s
+          repeat_interval: 30m
+
+# Inhibition rules to prevent alert spam
+inhibit_rules:
+  # Inhibit warning alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+    
+  # Inhibit specific alert combinations
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: 'High.*'
+    equal: ['instance']
+
+# Receivers define notification channels
+receivers:
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://app:8080/api/monitoring/alerts/webhook'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alertmanager'
+            password: 'webhook-secret'
+
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://app:8080/api/monitoring/alerts/critical'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alertmanager'
+            password: 'webhook-secret'
+
+  - name: 'warning-alerts'
+    webhook_configs:
+      - url: 'http://app:8080/api/monitoring/alerts/warning'
+        send_resolved: true
+
+  - name: 'service-alerts'
+    webhook_configs:
+      - url: 'http://app:8080/api/monitoring/alerts/service'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'alertmanager'
+            password: 'webhook-secret'
+
+# Email configuration (optional - configure SMTP settings above to enable)
+# Uncomment and configure the email_configs sections below when ready to use email notifications
+#
+# - name: 'critical-alerts'
+#   email_configs:
+#     - to: 'admin@example.com'
+#       from: 'alerts@digitalcommandcenter.local'
+#       smarthost: 'localhost:587'
+#       auth_username: ''
+#       auth_password: ''
+#       require_tls: false
+#       headers:
+#         Subject: '[CRITICAL] Digital Command Center Alert'
+#       html: '{{ template "email.default.html" . }}'
+#
+# - name: 'warning-alerts'
+#   email_configs:
+#     - to: 'admin@example.com'
+#       from: 'alerts@digitalcommandcenter.local'
+#       smarthost: 'localhost:587'
+#       headers:
+#         Subject: '[WARNING] Digital Command Center Alert'
+#       html: '{{ template "email.default.html" . }}'
+
+# Slack integration (optional - configure if needed)
+# - name: 'slack-alerts'
+#   slack_configs:
+#     - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+#       channel: '#alerts'
+#       send_resolved: true

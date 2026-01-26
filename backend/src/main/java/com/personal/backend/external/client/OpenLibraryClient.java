@@ -58,9 +58,11 @@ public class OpenLibraryClient {
                 BookMetadata book = response.getFirstResult();
                 log.info("Found book metadata for title: {} -> {}", title, book.getTitle());
                 return Optional.of(book);
+
             } else {
-                log.info("No book found for title: {}", title);
-                return Optional.empty();
+                // If specific title search fails, try generic query search which is more forgiving
+                log.info("No book found for exact title: {}, trying generic search", title);
+                return searchByGeneralQuery(title);
             }
             
         } catch (Exception e) {
@@ -190,6 +192,33 @@ public class OpenLibraryClient {
             
         } catch (Exception e) {
             log.error("Error searching OpenLibrary for title: {} and author: {}", title, author, e);
+            return Optional.empty();
+        }
+    }
+    
+    private Optional<BookMetadata> searchByGeneralQuery(String query) {
+        try {
+            String encodedQuery = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8);
+            String url = String.format("%s/search.json?q=%s&limit=1", baseUrl, encodedQuery);
+            
+            OpenLibraryResponse response = webClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .bodyToMono(OpenLibraryResponse.class)
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .retryWhen(Retry.backoff(3, Duration.ofSeconds(1))
+                            .filter(this::isRetryableException))
+                    .block();
+            
+            if (response != null && response.hasResults()) {
+                BookMetadata book = response.getFirstResult();
+                log.info("Found book metadata via generic search for: {} -> {}", query, book.getTitle());
+                return Optional.of(book);
+            }
+            
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("Error exploring generic search for: {}", query, e);
             return Optional.empty();
         }
     }

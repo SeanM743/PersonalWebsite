@@ -27,7 +27,8 @@ const LoginPage: React.FC = () => {
       // Navigate to dashboard after successful login
       navigate('/dashboard');
     } catch (err: any) {
-      error('Login Failed', err.message || 'Invalid credentials');
+      // Don't clear the form on error, just show the error
+      error('Login Failed', err.message || 'Invalid credentials. Please check your username and password.');
     } finally {
       setIsLoading(false);
     }

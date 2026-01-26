@@ -133,6 +133,18 @@ The Content Management system provides comprehensive content creation and manage
 4. THE Content_Management_System SHALL handle AI function errors gracefully and provide meaningful error messages
 5. THE Content_Management_System SHALL log AI-initiated content operations for audit and debugging purposes
 
+### Requirement 10: Quick Facts Metadata Display
+
+**User Story:** As a user, I want to view detailed metadata for enriched quick facts, so that I can see additional information like book authors, publication dates, and other relevant details in an organized way.
+
+#### Acceptance Criteria
+
+1. WHEN a quick fact has enriched metadata, THE Content_Management_System SHALL display a clickable icon next to the quick fact entry
+2. WHEN the metadata icon is clicked, THE Content_Management_System SHALL open a modal displaying all available metadata in an organized format
+3. THE Content_Management_System SHALL format metadata appropriately based on the quick fact category (books show author and publication year, movies show director and release year, etc.)
+4. THE Content_Management_System SHALL provide a way to close the metadata modal and return to the main quick facts view
+5. WHEN no enriched metadata is available, THE Content_Management_System SHALL not display the metadata icon for that quick fact
+
 ### Requirement 9: External API Integration
 
 **User Story:** As a system integrator, I want reliable external API integration, so that media and activity metadata can be fetched automatically with proper error handling.

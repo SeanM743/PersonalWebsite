@@ -1,0 +1,264 @@
+groups:
+  - name: service_health
+    rules:
+      # Service health score alerts
+      - alert: ServiceHealthDegraded
+        expr: service_health_score < 80
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Service health degraded on {{ $labels.instance }}"
+          description: "Overall service health score is {{ $value }}/100"
+
+      - alert: ServiceHealthCritical
+        expr: service_health_score < 50
+        for: 2m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Service health critical on {{ $labels.instance }}"
+          description: "Overall service health score is {{ $value }}/100"
+
+      # Database health alerts
+      - alert: DatabaseHealthDown
+        expr: health_checks_total{service="database",status="DOWN"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Database health check failed on {{ $labels.instance }}"
+          description: "Database connectivity is down"
+
+      - alert: DatabaseResponseTimeSlow
+        expr: service_health_response_time_ms{service="database"} > 5000
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Database response time slow on {{ $labels.instance }}"
+          description: "Database health check response time is {{ $value }}ms"
+
+      # High error rate alerts
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "High error rate detected on {{ $labels.instance }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.uri }}"
+
+      - alert: HighClientErrorRate
+        expr: rate(http_requests_total{status=~"4.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "High client error rate detected on {{ $labels.instance }}"
+          description: "Client error rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.uri }}"
+
+      # Response time alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "High response time detected on {{ $labels.instance }}"
+          description: "95th percentile response time is {{ $value }}s for endpoint {{ $labels.uri }}"
+
+      - alert: VeryHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Very high response time detected on {{ $labels.instance }}"
+          description: "95th percentile response time is {{ $value }}s for endpoint {{ $labels.uri }}"
+
+      # Service availability alerts
+      - alert: ServiceDown
+        expr: up{job="digital-command-center"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Service is down on {{ $labels.instance }}"
+          description: "Digital Command Center service has been down for more than 1 minute"
+
+      - alert: ServiceDegraded
+        expr: up{job="digital-command-center"} < 1
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Service is degraded on {{ $labels.instance }}"
+          description: "Digital Command Center service availability is below 100%"
+
+      # Health check failure alerts
+      - alert: HealthCheckFailures
+        expr: rate(health_check_failures_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Health check failures detected on {{ $labels.instance }}"
+          description: "Health check failure rate is {{ $value }} per second"
+
+  - name: throttling_alerts
+    rules:
+      # Throttling rate alerts
+      - alert: HighThrottlingRate
+        expr: rate(requests_throttled_total[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "High throttling rate detected on {{ $labels.instance }}"
+          description: "Throttling rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.uri }}"
+
+      - alert: VeryHighThrottlingRate
+        expr: rate(requests_throttled_total[5m]) / rate(http_requests_total[5m]) > 0.15
+        for: 2m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Very high throttling rate detected on {{ $labels.instance }}"
+          description: "Throttling rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.uri }}"
+
+      # Throttled requests volume
+      - alert: HighThrottledRequestsVolume
+        expr: rate(requests_throttled_total[1m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "High volume of throttled requests on {{ $labels.instance }}"
+          description: "{{ $value }} requests per second are being throttled on endpoint {{ $labels.uri }}"
+
+  - name: cache_alerts
+    rules:
+      # Cache hit ratio alerts by cache type
+      - alert: LowCacheHitRatio
+        expr: cache_hit_ratio < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Low cache hit ratio detected for {{ $labels.cache_name }}"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }} for cache {{ $labels.cache_name }}"
+
+      - alert: VeryLowCacheHitRatio
+        expr: cache_hit_ratio < 0.6
+        for: 5m
+        labels:
+          severity: critical
+          service: digital-command-center
+        annotations:
+          summary: "Very low cache hit ratio detected for {{ $labels.cache_name }}"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }} for cache {{ $labels.cache_name }}"
+
+      # Critical cache hit ratio for specific cache types
+      - alert: DatabaseCacheHitRatioLow
+        expr: cache_hit_ratio{cache_name="database-cache"} < 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Database cache hit ratio low"
+          description: "Database cache hit ratio is {{ $value | humanizePercentage }}, expected > 90%"
+
+      - alert: ApiCacheHitRatioLow
+        expr: cache_hit_ratio{cache_name="api-cache"} < 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "API cache hit ratio low"
+          description: "API cache hit ratio is {{ $value | humanizePercentage }}, expected > 85%"
+
+      # Cache performance degradation
+      - alert: CachePerformanceDegradation
+        expr: rate(cache_misses_total[5m]) > rate(cache_hits_total[5m])
+        for: 10m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Cache performance degradation detected for {{ $labels.cache_name }}"
+          description: "Cache misses are exceeding hits for cache {{ $labels.cache_name }}"
+
+      # High cache eviction rate
+      - alert: HighCacheEvictionRate
+        expr: rate(cache_evictions_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "High cache eviction rate for {{ $labels.cache_name }}"
+          description: "Cache eviction rate is {{ $value }} per second for cache {{ $labels.cache_name }}"
+
+      # Cache operation timing alerts
+      - alert: SlowCacheOperations
+        expr: histogram_quantile(0.95, rate(cache_operation_duration_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: digital-command-center
+        annotations:
+          summary: "Slow cache operations detected for {{ $labels.cache_name }}"
+          description: "95th percentile cache operation time is {{ $value }}s for cache {{ $labels.cache_name }}"
+
+  - name: system_alerts
+    rules:
+      # Memory usage alerts
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # Disk usage alerts
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk usage detected on {{ $labels.instance }}"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mountpoint }}"
+
+      # CPU usage alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}%"

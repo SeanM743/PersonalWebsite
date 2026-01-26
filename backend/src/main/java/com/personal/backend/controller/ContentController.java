@@ -105,10 +105,16 @@ public class ContentController {
         return ResponseEntity.ok(response);
     }
     
-    @GetMapping("/facts/{key}")
-    public ResponseEntity<ContentResponse<QuickFact>> getQuickFact(@PathVariable String key) {
-        ContentResponse<QuickFact> response = quickFactService.getQuickFact(key);
+    @GetMapping("/facts/{key}/details")
+    public ResponseEntity<ContentResponse<QuickFact>> getQuickFactDetails(@PathVariable String key) {
+        ContentResponse<QuickFact> response = quickFactService.getQuickFactWithDetails(key);
         return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.notFound().build();
+    }
+    
+    @PostMapping("/facts/{key}/enrich")
+    public ResponseEntity<ContentResponse<QuickFact>> enrichQuickFact(@PathVariable String key) {
+        ContentResponse<QuickFact> response = quickFactService.enrichQuickFact(key);
+        return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
     }
     
     @GetMapping("/facts/category/{category}")

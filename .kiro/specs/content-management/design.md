@@ -926,3 +926,21 @@ The Content Management system requires comprehensive testing combining unit test
 - Use real integrations for end-to-end validation
 - Implement test doubles for error scenario simulation
 - Create mock responses for various API failure and success scenarios across all integrated services
+
+### Quick Facts Metadata Display Properties
+
+**Property 28: Metadata icon display for enriched facts**
+*For any* quick fact with enriched metadata, the Content_Management_System should display a clickable metadata icon next to the quick fact entry
+**Validates: Requirements 10.1**
+
+**Property 29: Metadata modal display and formatting**
+*For any* metadata icon click, the Content_Management_System should open a modal displaying all available metadata in an organized format appropriate to the quick fact category
+**Validates: Requirements 10.2, 10.3**
+
+**Property 30: Metadata modal close functionality**
+*For any* open metadata modal, the Content_Management_System should provide a way to close the modal and return to the main quick facts view
+**Validates: Requirements 10.4**
+
+**Property 31: Conditional metadata icon visibility**
+*For any* quick fact without enriched metadata, the Content_Management_System should not display the metadata icon
+**Validates: Requirements 10.5**

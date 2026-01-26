@@ -32,12 +32,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         const token = localStorage.getItem('authToken');
         if (token) {
+          // Validate token by trying to get current user
           const userData = await authService.getCurrentUser();
           setUser(userData);
         }
       } catch (error) {
         console.error('Failed to initialize auth:', error);
+        // Clear invalid token
         localStorage.removeItem('authToken');
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -51,8 +54,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.login(username, password);
       localStorage.setItem('authToken', response.token);
       setUser(response.user);
-    } catch (error) {
-      throw error;
+    } catch (error: any) {
+      // Clear any existing invalid token
+      localStorage.removeItem('authToken');
+      setUser(null);
+      
+      // Re-throw with better error message
+      const errorMessage = error.response?.data?.message || error.message || 'Login failed';
+      throw new Error(errorMessage);
     }
   };
 

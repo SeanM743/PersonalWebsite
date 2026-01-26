@@ -23,6 +23,7 @@ public class QuickFactService {
     
     private final QuickFactRepository quickFactRepository;
     private final ContentValidationService validationService;
+    private final QuickFactEnrichmentService enrichmentService;
     
     @Transactional
     public ContentResponse<QuickFact> createQuickFact(QuickFact quickFact) {
@@ -53,6 +54,16 @@ public class QuickFactService {
             }
             
             QuickFact savedFact = quickFactRepository.save(quickFact);
+            
+            // Try to enrich the fact with external data
+            try {
+                savedFact = enrichmentService.enrichQuickFact(savedFact);
+                if (savedFact.getIsEnriched() != null && savedFact.getIsEnriched()) {
+                    savedFact = quickFactRepository.save(savedFact);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich quick fact {}: {}", savedFact.getKey(), e.getMessage());
+            }
             
             log.info("Successfully created quick fact with key: {}", quickFact.getKey());
             return ContentResponse.success(savedFact, "Quick fact created successfully");
@@ -105,6 +116,19 @@ public class QuickFactService {
             }
             
             QuickFact savedFact = quickFactRepository.save(quickFact);
+            
+            // Try to enrich the fact with external data if it's new or value changed
+            try {
+                if (operation.equals("created") || !existingFact.get().getValue().equals(sanitizedValue)) {
+                    savedFact.setIsEnriched(false); // Mark for re-enrichment
+                    savedFact = enrichmentService.enrichQuickFact(savedFact);
+                    if (savedFact.getIsEnriched() != null && savedFact.getIsEnriched()) {
+                        savedFact = quickFactRepository.save(savedFact);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich quick fact {}: {}", savedFact.getKey(), e.getMessage());
+            }
             
             log.info("Successfully {} quick fact with key: {}", operation, sanitizedKey);
             
@@ -201,6 +225,56 @@ public class QuickFactService {
         }
         
         return ContentResponse.success(quickFact.get());
+    }
+    
+    public ContentResponse<QuickFact> getQuickFactWithDetails(String key) {
+        Optional<QuickFact> quickFact = quickFactRepository.findById(key);
+        
+        if (quickFact.isEmpty()) {
+            return ContentResponse.error("Quick fact not found with key: " + key);
+        }
+        
+        QuickFact fact = quickFact.get();
+        
+        // If not enriched, try to enrich it
+        if (fact.getIsEnriched() == null || !fact.getIsEnriched()) {
+            try {
+                fact = enrichmentService.enrichQuickFact(fact);
+                if (fact.getIsEnriched() != null && fact.getIsEnriched()) {
+                    fact = quickFactRepository.save(fact);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to enrich quick fact {}: {}", key, e.getMessage());
+            }
+        }
+        
+        return ContentResponse.success(fact);
+    }
+    
+    @Transactional
+    public ContentResponse<QuickFact> enrichQuickFact(String key) {
+        Optional<QuickFact> quickFact = quickFactRepository.findById(key);
+        
+        if (quickFact.isEmpty()) {
+            return ContentResponse.error("Quick fact not found with key: " + key);
+        }
+        
+        try {
+            QuickFact fact = quickFact.get();
+            fact.setIsEnriched(false); // Force re-enrichment
+            fact = enrichmentService.enrichQuickFact(fact);
+            
+            if (fact.getIsEnriched() != null && fact.getIsEnriched()) {
+                fact = quickFactRepository.save(fact);
+                return ContentResponse.success(fact, "Quick fact enriched successfully");
+            } else {
+                return ContentResponse.success(fact, "No enrichment available for this category");
+            }
+            
+        } catch (Exception e) {
+            log.error("Error enriching quick fact", e);
+            return ContentResponse.error("Failed to enrich quick fact: " + e.getMessage());
+        }
     }
     
     public ContentResponse<List<QuickFact>> getAllQuickFacts() {

@@ -301,8 +301,9 @@ public class MarketDataCacheManager {
     
     /**
      * Scheduled cache maintenance
+     * DISABLED: Commented out to prevent any automatic background tasks
      */
-    @Scheduled(fixedRate = 300000) // Every 5 minutes
+    // @Scheduled(fixedRate = 300000) // Every 5 minutes
     public void performCacheMaintenance() {
         cleanupStaleEntries();
         cleanupAccessTracking();
