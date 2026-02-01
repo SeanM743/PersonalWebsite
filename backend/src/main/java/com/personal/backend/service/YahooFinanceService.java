@@ -30,8 +30,14 @@ public class YahooFinanceService {
      * Fetch and persist historical prices for a symbol from startDate to endDate
      */
     public void fetchAndPersistHistoricalPrices(String symbol, LocalDate startDate, LocalDate endDate) {
+        log.info("Fetching historical prices for {} from {} to {}", symbol, startDate, endDate);
+        fetchAndPersistHistoricalPricesWithRetry(symbol, startDate, endDate, 5);
+    }
+
+    private void fetchAndPersistHistoricalPricesWithRetry(String symbol, LocalDate startDate, LocalDate endDate, int retries) {
         try {
-            log.info("Fetching historical prices for {} from {} to {}", symbol, startDate, endDate);
+            // Add a delay to avoid rate limiting
+            Thread.sleep(1500);
             
             Calendar from = Calendar.getInstance();
             from.setTime(Date.from(startDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
@@ -53,7 +59,7 @@ public class YahooFinanceService {
                 return;
             }
             
-            List<StockDailyPrice> prices = new ArrayList<>();
+            int persistedCount = 0;
             for (HistoricalQuote quote : history) {
                 if (quote.getDate() == null || quote.getClose() == null) {
                     continue;
@@ -65,23 +71,29 @@ public class YahooFinanceService {
                 
                 // Check if already exists
                 if (dailyPriceRepository.findBySymbolAndDate(symbol, date).isEmpty()) {
-                    prices.add(StockDailyPrice.builder()
+                    dailyPriceRepository.save(StockDailyPrice.builder()
                         .symbol(symbol)
                         .date(date)
                         .closePrice(closePrice)
                         .build());
+                    persistedCount++;
                 }
             }
             
-            if (!prices.isEmpty()) {
-                dailyPriceRepository.saveAll(prices);
-                log.info("Persisted {} price points for {}", prices.size(), symbol);
+            if (persistedCount > 0) {
+                log.info("Persisted {} price points for {}", persistedCount, symbol);
             } else {
                 log.info("All prices already exist for {}", symbol);
             }
             
         } catch (Exception e) {
-            log.error("Failed to fetch historical prices for {}: {}", symbol, e.getMessage(), e);
+            if (e.getMessage() != null && e.getMessage().contains("429") && retries > 0) {
+                log.warn("Rate limited (429) for historical data of {}, retrying in 10 seconds... ({} retries left)", symbol, retries - 1);
+                try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                fetchAndPersistHistoricalPricesWithRetry(symbol, startDate, endDate, retries - 1);
+            } else {
+                log.error("Failed to fetch historical prices for {}: {}", symbol, e.getMessage());
+            }
         }
     }
     
@@ -146,13 +158,25 @@ public class YahooFinanceService {
      * Get real-time MarketData for a single symbol
      */
     public Optional<MarketData> getMarketData(String symbol) {
+        return getMarketDataWithRetry(symbol, 3);
+    }
+
+    private Optional<MarketData> getMarketDataWithRetry(String symbol, int retries) {
         try {
+            // Add a small delay to avoid rate limiting
+            Thread.sleep(500); 
+            
             Stock stock = YahooFinance.get(symbol);
             if (stock == null || stock.getQuote() == null) {
                 return Optional.empty();
             }
             return Optional.of(mapToMarketData(stock));
         } catch (Exception e) {
+            if (e.getMessage().contains("429") && retries > 0) {
+                log.warn("Rate limited (429) for {}, retrying in 2 seconds... ({} retries left)", symbol, retries - 1);
+                try { Thread.sleep(2000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                return getMarketDataWithRetry(symbol, retries - 1);
+            }
             log.error("Error fetching market data for {}: {}", symbol, e.getMessage());
             return Optional.empty();
         }

@@ -183,6 +183,17 @@ public class AccountSnapshotService {
         
         log.info("Checking for missing snapshots from {} to {}", startDate, endDate);
         
+        // Ensure historical stock prices exist for all traded symbols
+        List<StockTransaction> allTransactions = transactionRepository.findAll();
+        Set<String> symbols = allTransactions.stream()
+            .map(StockTransaction::getSymbol)
+            .collect(Collectors.toSet());
+        
+        if (!symbols.isEmpty()) {
+            log.info("Ensuring historical stock price data exists for {} symbols before filling snapshots", symbols.size());
+            yahooFinanceService.ensureHistoricalDataExists(new ArrayList<>(symbols));
+        }
+        
         List<Account> accounts = accountRepository.findAll();
         int totalFilled = 0;
         

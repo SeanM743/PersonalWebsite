@@ -60,6 +60,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/actuator/prometheus").permitAll()
                 .requestMatchers("/error").permitAll()
+                .requestMatchers("/api/test/**").permitAll()
                 // Recalculation endpoint - allow for manual fix
                 .requestMatchers("/api/portfolio/recalculate").permitAll()
                 // WebSocket endpoints
