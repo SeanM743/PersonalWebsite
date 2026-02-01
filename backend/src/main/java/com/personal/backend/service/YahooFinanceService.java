@@ -31,13 +31,13 @@ public class YahooFinanceService {
      */
     public void fetchAndPersistHistoricalPrices(String symbol, LocalDate startDate, LocalDate endDate) {
         log.info("Fetching historical prices for {} from {} to {}", symbol, startDate, endDate);
-        fetchAndPersistHistoricalPricesWithRetry(symbol, startDate, endDate, 5);
+        fetchAndPersistHistoricalPricesWithRetry(symbol, startDate, endDate, 10);
     }
 
     private void fetchAndPersistHistoricalPricesWithRetry(String symbol, LocalDate startDate, LocalDate endDate, int retries) {
         try {
             // Add a delay to avoid rate limiting
-            Thread.sleep(1500);
+            Thread.sleep(2000);
             
             Calendar from = Calendar.getInstance();
             from.setTime(Date.from(startDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
@@ -87,12 +87,13 @@ public class YahooFinanceService {
             }
             
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("429") && retries > 0) {
-                log.warn("Rate limited (429) for historical data of {}, retrying in 10 seconds... ({} retries left)", symbol, retries - 1);
-                try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            String message = e.getMessage();
+            if (message != null && message.contains("429") && retries > 0) {
+                log.warn("Rate limited (429) for historical data of {}, retrying in 30 seconds... ({} retries left)", symbol, retries - 1);
+                try { Thread.sleep(30000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                 fetchAndPersistHistoricalPricesWithRetry(symbol, startDate, endDate, retries - 1);
             } else {
-                log.error("Failed to fetch historical prices for {}: {}", symbol, e.getMessage());
+                log.error("Failed to fetch historical prices for {}: {}", symbol, message);
             }
         }
     }

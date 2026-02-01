@@ -20,20 +20,14 @@ public class TestController {
     
     @PostMapping("/fetch-prices")
     public Map<String, Object> fetchPrices() {
-        log.info("Manual trigger: fetching stock prices");
+        log.info("Manual trigger: fetching all missing historical stock prices and snapshots");
         try {
-            yahooFinanceService.fetchAndPersistHistoricalPrices("AMZN", 
-                LocalDate.of(2026, 1, 1), LocalDate.now());
-            yahooFinanceService.fetchAndPersistHistoricalPrices("ANET", 
-                LocalDate.of(2026, 1, 1), LocalDate.now());
-            yahooFinanceService.fetchAndPersistHistoricalPrices("NVDA", 
-                LocalDate.of(2026, 1, 1), LocalDate.now());
-            yahooFinanceService.fetchAndPersistHistoricalPrices("TMUS", 
-                LocalDate.of(2026, 1, 1), LocalDate.now());
+            // This now runs asynchronously in the background
+            accountSnapshotService.fillMissingSnapshots();
             
-            return Map.of("success", true, "message", "Prices fetched");
+            return Map.of("success", true, "message", "Background backfill triggered for all symbols");
         } catch (Exception e) {
-            log.error("Failed: {}", e.getMessage(), e);
+            log.error("Failed to trigger backfill: {}", e.getMessage(), e);
             return Map.of("success", false, "message", e.getMessage());
         }
     }
