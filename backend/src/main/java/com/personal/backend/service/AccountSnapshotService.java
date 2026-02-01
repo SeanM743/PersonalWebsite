@@ -83,7 +83,7 @@ public class AccountSnapshotService {
      * Calculate the balance for an account on a specific date
      */
     private BigDecimal calculateAccountBalance(Account account, LocalDate date) {
-        if ("STOCK_PORTFOLIO".equals(account.getType())) {
+        if (Account.AccountType.STOCK_PORTFOLIO.equals(account.getType())) {
             return calculateStockAccountBalance(account, date);
         } else {
             return getManualAccountBalance(account);
@@ -257,7 +257,7 @@ public class AccountSnapshotService {
      */
     private List<LocalDate> findMissingDates(Account account, LocalDate startDate, LocalDate endDate) {
         Long accountId = account.getId();
-        boolean isStockAccount = "STOCK_PORTFOLIO".equals(account.getType());
+        boolean isStockAccount = Account.AccountType.STOCK_PORTFOLIO.equals(account.getType());
         
         // Get all existing snapshot dates and balances for this account
         List<AccountBalanceHistory> existingSnapshots = historyRepository
