@@ -9,6 +9,7 @@ import com.personal.backend.repository.StockTransactionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -176,6 +177,7 @@ public class AccountSnapshotService {
     /**
      * Fill missing snapshots for all accounts
      */
+    @Async
     @Transactional
     public void fillMissingSnapshots() {
         LocalDate startDate = LocalDate.of(2026, 1, 1);
