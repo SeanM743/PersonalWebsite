@@ -209,21 +209,31 @@ public class AccountSnapshotService {
             int totalFilled = 0;
             
             for (Account account : accounts) {
-                List<LocalDate> missingDates = findMissingDates(account.getId(), startDate, endDate);
+                List<LocalDate> missingDates = findMissingDates(account, startDate, endDate);
                 
                 if (!missingDates.isEmpty()) {
-                    log.info("Found {} missing dates for account {} ({})", 
+                    log.info("Found {} missing or zero-balance dates for account {} ({})", 
                         missingDates.size(), account.getId(), account.getName());
                     
                     for (LocalDate date : missingDates) {
                         try {
                             BigDecimal balance = calculateAccountBalance(account, date);
                             
-                            AccountBalanceHistory snapshot = AccountBalanceHistory.builder()
-                                .accountId(account.getId())
-                                .date(date)
-                                .balance(balance)
-                                .build();
+                            // Check if snapshot already exists to handle updates
+                            Optional<AccountBalanceHistory> existingSnapshot = 
+                                historyRepository.findByAccountIdAndDate(account.getId(), date);
+                            
+                            AccountBalanceHistory snapshot;
+                            if (existingSnapshot.isPresent()) {
+                                snapshot = existingSnapshot.get();
+                                snapshot.setBalance(balance);
+                            } else {
+                                snapshot = AccountBalanceHistory.builder()
+                                    .accountId(account.getId())
+                                    .date(date)
+                                    .balance(balance)
+                                    .build();
+                            }
                             
                             historyRepository.save(snapshot);
                             totalFilled++;
@@ -243,22 +253,31 @@ public class AccountSnapshotService {
     
     /**
      * Find dates that are missing snapshots for an account
+     * For STOCK_PORTFOLIO accounts, also includes dates where the balance is zero
      */
-    private List<LocalDate> findMissingDates(Long accountId, LocalDate startDate, LocalDate endDate) {
-        // Get all existing snapshot dates for this account
+    private List<LocalDate> findMissingDates(Account account, LocalDate startDate, LocalDate endDate) {
+        Long accountId = account.getId();
+        boolean isStockAccount = "STOCK_PORTFOLIO".equals(account.getType());
+        
+        // Get all existing snapshot dates and balances for this account
         List<AccountBalanceHistory> existingSnapshots = historyRepository
             .findByAccountIdAndDateBetweenOrderByDateAsc(accountId, startDate, endDate);
         
-        Set<LocalDate> existingDates = existingSnapshots.stream()
-            .map(AccountBalanceHistory::getDate)
-            .collect(Collectors.toSet());
+        Map<LocalDate, BigDecimal> existingData = existingSnapshots.stream()
+            .collect(Collectors.toMap(AccountBalanceHistory::getDate, AccountBalanceHistory::getBalance));
         
-        // Find missing dates
+        // Find missing or incomplete dates
         List<LocalDate> missingDates = new ArrayList<>();
         LocalDate currentDate = startDate;
         
         while (!currentDate.isAfter(endDate)) {
-            if (!existingDates.contains(currentDate)) {
+            BigDecimal existingBalance = existingData.get(currentDate);
+            
+            if (existingBalance == null) {
+                // Completely missing
+                missingDates.add(currentDate);
+            } else if (isStockAccount && existingBalance.compareTo(BigDecimal.ZERO) == 0) {
+                // For stock accounts, if balance is 0, we might have fixed data now
                 missingDates.add(currentDate);
             }
             currentDate = currentDate.plusDays(1);
