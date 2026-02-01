@@ -147,6 +147,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         
+        <!-- Yahoo Finance API for Historical Stock Data -->
+        <dependency>
+            <groupId>com.yahoofinance-api</groupId>
+            <artifactId>YahooFinanceAPI</artifactId>
+            <version>3.17.0</version>
+        </dependency>
+        
         <!-- Monitoring and Metrics Dependencies -->
         <dependency>
             <groupId>io.micrometer</groupId>

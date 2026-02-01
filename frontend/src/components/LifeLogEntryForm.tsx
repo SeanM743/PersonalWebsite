@@ -37,18 +37,7 @@ interface FormData {
   metadata?: string;
 }
 
-interface BookMetadata {
-  title: string;
-  author_name?: string[];
-  isbn?: string[];
-  cover_i?: number;
-  coverUrl?: string;
-  publisher?: string[];
-  first_publish_year?: number;
-  description?: string | { value: string };
-  subject?: string[];
-  number_of_pages_median?: number;
-}
+
 
 const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
   isOpen,
@@ -210,8 +199,9 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
       return;
     }
 
-    // Only support books 
-    if (formData.type !== LifeLogType.BOOK) {
+    // Allow fetching matching metadata for supported types
+    const supportedTypes = [LifeLogType.BOOK, LifeLogType.MOVIE, LifeLogType.SHOW, LifeLogType.ALBUM];
+    if (!supportedTypes.includes(formData.type)) {
       return;
     }
 
@@ -231,7 +221,7 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
           metadata: JSON.stringify(metadata)
         }));
 
-        success('Found book information!');
+        success(`Found ${formatType(formData.type)} information!`);
       } else {
         error('No information found for this title');
       }
@@ -286,7 +276,7 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
   // Render star rating selector
   const renderRatingSelector = () => (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">
+      <label className="block text-sm font-medium text-main">
         Mahoney Rating (Optional)
       </label>
       <div className="flex items-center space-x-1">
@@ -300,20 +290,20 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
             <Star
               className={`h-6 w-6 transition-colors ${star <= formData.rating
                 ? 'text-yellow-400 fill-current hover:text-yellow-500'
-                : 'text-gray-300 hover:text-gray-400'
+                : 'text-muted hover:text-gray-400'
                 }`}
             />
           </button>
         ))}
         {formData.rating > 0 && (
-          <span className="text-sm text-gray-600 ml-2">({formData.rating}/5)</span>
+          <span className="text-sm text-medium ml-2">({formData.rating}/5)</span>
         )}
       </div>
     </div>
   );
 
   // Helper to get parsed metadata
-  const getBookMetadata = (): BookMetadata | null => {
+  const getEntryMetadata = (): any | null => {
     if (!formData.metadata) return null;
     try {
       return JSON.parse(formData.metadata);
@@ -322,28 +312,28 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
     }
   };
 
-  const bookMetadata = getBookMetadata();
+  const entryMetadata = getEntryMetadata();
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-border">
         <form onSubmit={handleSubmit}>
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between p-6 border-b border-border">
             <div className="flex items-center space-x-3">
-              <div className={`w-10 h-10 ${getColorForType(formData.type)} rounded-xl flex items-center justify-center text-white`}>
+              <div className={`w-10 h-10 ${getColorForType(formData.type)} rounded-xl flex items-center justify-center text-white shadow-lg`}>
                 {getIconForType(formData.type)}
               </div>
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className="text-xl font-bold text-main">
                 {isNew ? 'Add New Entry' : 'Edit Entry'}
               </h2>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-muted hover:text-main transition-colors"
             >
               <X className="h-6 w-6" />
             </button>
@@ -353,107 +343,94 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
           <div className="p-6 space-y-6">
             {/* Title */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-main">
                 Title *
               </label>
               <input
                 type="text"
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.title ? 'border-red-300' : 'border-gray-300'
+                className={`w-full px-4 py-2 bg-page border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main placeholder-muted ${errors.title ? 'border-red-500' : 'border-border'
                   }`}
-                placeholder="Enter title..."
+                placeholder={`Enter ${formData.type.toLowerCase()} title...`}
               />
               {errors.title && (
-                <div className="flex items-center space-x-1 text-red-600 text-sm">
+                <div className="flex items-center space-x-1 text-red-500 text-sm">
                   <AlertCircle className="h-4 w-4" />
                   <span>{errors.title}</span>
                 </div>
               )}
 
-              {formData.type === LifeLogType.BOOK && (
+              {[LifeLogType.BOOK, LifeLogType.MOVIE, LifeLogType.SHOW, LifeLogType.ALBUM].includes(formData.type) && (
                 <div className="space-y-3">
                   <button
                     type="button"
                     onClick={handleFetchMetadata}
                     disabled={isFetchingMetadata || !formData.title.trim()}
-                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-sm text-primary hover:text-primary/80 flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
                   >
                     {isFetchingMetadata ? (
                       <span>Searching...</span>
                     ) : (
                       <>
                         <Search className="h-3 w-3" />
-                        <span>Fetch Book Info</span>
+                        <span>Fetch {formatType(formData.type)} Info</span>
                       </>
                     )}
                   </button>
 
-                  {/* Read-only Book Metadata */}
-                  {bookMetadata && (
-                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 text-sm space-y-3 animate-fadeIn">
-                      <h3 className="font-medium text-gray-900 flex items-center space-x-2">
-                        <Book className="h-4 w-4 text-gray-500" />
+                  {/* Read-only Metadata Preview */}
+                  {entryMetadata && formData.type === LifeLogType.BOOK && (
+                    <div className="bg-secondary/30 rounded-lg p-4 border border-border text-sm space-y-3 animate-fadeIn">
+                      <h3 className="font-medium text-main flex items-center space-x-2">
+                        <Book className="h-4 w-4 text-muted" />
                         <span>Book Details</span>
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Author */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Author</label>
+                          <label className="block text-xs font-medium text-muted mb-1">Author</label>
                           <input
                             type="text"
-                            value={bookMetadata.author_name?.join(', ') || 'Unknown'}
+                            value={entryMetadata.author_name?.join(', ') || 'Unknown'}
                             disabled
-                            className="w-full px-2 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed text-xs"
+                            className="w-full px-2 py-1.5 bg-page border border-border rounded text-muted-foreground cursor-not-allowed text-xs"
                           />
                         </div>
 
                         {/* Publisher */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Publisher</label>
+                          <label className="block text-xs font-medium text-muted mb-1">Publisher</label>
                           <input
                             type="text"
-                            value={(Array.isArray(bookMetadata.publisher) ? bookMetadata.publisher[0] : bookMetadata.publisher) || 'Unknown'}
+                            value={(Array.isArray(entryMetadata.publisher) ? entryMetadata.publisher[0] : entryMetadata.publisher) || 'Unknown'}
                             disabled
-                            className="w-full px-2 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed text-xs"
+                            className="w-full px-2 py-1.5 bg-page border border-border rounded text-muted-foreground cursor-not-allowed text-xs"
                           />
                         </div>
 
                         {/* Year */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">First Published</label>
+                          <label className="block text-xs font-medium text-muted mb-1">First Published</label>
                           <input
                             type="text"
-                            value={bookMetadata.first_publish_year || 'Unknown'}
+                            value={entryMetadata.first_publish_year || 'Unknown'}
                             disabled
-                            className="w-full px-2 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed text-xs"
+                            className="w-full px-2 py-1.5 bg-page border border-border rounded text-muted-foreground cursor-not-allowed text-xs"
                           />
                         </div>
 
                         {/* Pages */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">Pages</label>
+                          <label className="block text-xs font-medium text-muted mb-1">Pages</label>
                           <input
                             type="text"
-                            value={bookMetadata.number_of_pages_median || 'Unknown'}
+                            value={entryMetadata.number_of_pages_median || 'Unknown'}
                             disabled
-                            className="w-full px-2 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed text-xs"
+                            className="w-full px-2 py-1.5 bg-page border border-border rounded text-muted-foreground cursor-not-allowed text-xs"
                           />
                         </div>
-
-                        {/* ISBN */}
-                        {bookMetadata.isbn && (
-                          <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">ISBN</label>
-                            <input
-                              type="text"
-                              value={Array.isArray(bookMetadata.isbn) ? bookMetadata.isbn[0] : bookMetadata.isbn}
-                              disabled
-                              className="w-full px-2 py-1.5 bg-gray-100 border border-gray-300 rounded text-gray-600 cursor-not-allowed text-xs font-mono"
-                            />
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -465,13 +442,13 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Type */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-main">
                   Type *
                 </label>
                 <select
                   value={formData.type}
                   onChange={(e) => handleChange('type', e.target.value as LifeLogType)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main appearance-none"
                 >
                   {Object.values(LifeLogType).map(type => (
                     <option key={type} value={type}>{formatType(type)}</option>
@@ -481,13 +458,13 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
 
               {/* Status */}
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-main">
                   Status *
                 </label>
                 <select
                   value={formData.status}
                   onChange={(e) => handleChange('status', e.target.value as EntryStatus)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main appearance-none"
                 >
                   {Object.values(EntryStatus).map(status => (
                     <option key={status} value={status}>{formatStatus(status)}</option>
@@ -498,50 +475,78 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
 
             {/* Dates Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Start Date */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Start Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={(e) => handleChange('startDate', e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
-              {/* End Date */}
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  End Date
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={(e) => handleChange('endDate', e.target.value)}
-                    className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.endDate ? 'border-red-300' : 'border-gray-300'
-                      }`}
-                  />
-                </div>
-                {errors.endDate && (
-                  <div className="flex items-center space-x-1 text-red-600 text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>{errors.endDate}</span>
+              {formData.type === LifeLogType.MOVIE ? (
+                /* Single Date for Movies */
+                <div className="md:col-span-2 space-y-2">
+                  <label className="block text-sm font-medium text-main">
+                    Date Watched
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                    <input
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => handleChange('endDate', e.target.value)}
+                      className={`w-full pl-10 pr-4 py-2 bg-page border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main ${errors.endDate ? 'border-red-500' : 'border-border'
+                        }`}
+                    />
                   </div>
-                )}
-              </div>
+                  {errors.endDate && (
+                    <div className="flex items-center space-x-1 text-red-500 text-sm">
+                      <AlertCircle className="h-4 w-4" />
+                      <span>{errors.endDate}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Start/End Date Range for others */
+                <>
+                  {/* Start Date */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-main">
+                      Start Date
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                      <input
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) => handleChange('startDate', e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main"
+                      />
+                    </div>
+                  </div>
+
+                  {/* End Date */}
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-main">
+                      End Date
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                      <input
+                        type="date"
+                        value={formData.endDate}
+                        onChange={(e) => handleChange('endDate', e.target.value)}
+                        className={`w-full pl-10 pr-4 py-2 bg-page border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main ${errors.endDate ? 'border-red-500' : 'border-border'
+                          }`}
+                      />
+                    </div>
+                    {errors.endDate && (
+                      <div className="flex items-center space-x-1 text-red-500 text-sm">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>{errors.endDate}</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Intensity (only for HOBBY) */}
             {formData.type === LifeLogType.HOBBY && (
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-main">
                   Intensity * (1-5)
                 </label>
                 <div className="flex items-center space-x-4">
@@ -551,17 +556,17 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
                     max="5"
                     value={formData.intensity}
                     onChange={(e) => handleChange('intensity', parseInt(e.target.value))}
-                    className="flex-1"
+                    className="flex-1 accent-primary"
                   />
-                  <span className="text-sm font-medium text-gray-700 w-8">
+                  <span className="text-sm font-medium text-main w-8">
                     {formData.intensity}
                   </span>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   How much time/focus is this hobby consuming?
                 </p>
                 {errors.intensity && (
-                  <div className="flex items-center space-x-1 text-red-600 text-sm">
+                  <div className="flex items-center space-x-1 text-red-500 text-sm">
                     <AlertCircle className="h-4 w-4" />
                     <span>{errors.intensity}</span>
                   </div>
@@ -572,7 +577,7 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
             {/* Rating */}
             {renderRatingSelector()}
             {errors.rating && (
-              <div className="flex items-center space-x-1 text-red-600 text-sm">
+              <div className="flex items-center space-x-1 text-red-500 text-sm">
                 <AlertCircle className="h-4 w-4" />
                 <span>{errors.rating}</span>
               </div>
@@ -580,39 +585,53 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
 
             {/* Key Takeaway */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-main">
                 Key Takeaway
               </label>
               <textarea
                 value={formData.keyTakeaway}
                 onChange={(e) => handleChange('keyTakeaway', e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main placeholder-muted"
                 placeholder="What did you learn or find most interesting?"
               />
             </div>
 
             {/* Image URL */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-main">
                 Image URL (Optional)
               </label>
-              <input
-                type="url"
-                value={formData.imageUrl}
-                onChange={(e) => handleChange('imageUrl', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="https://example.com/image.jpg"
-              />
+              <div className="flex gap-4 items-start">
+                <input
+                  type="url"
+                  value={formData.imageUrl}
+                  onChange={(e) => handleChange('imageUrl', e.target.value)}
+                  className="flex-1 px-4 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-main placeholder-muted"
+                  placeholder="https://example.com/image.jpg"
+                />
+                {formData.imageUrl && (
+                  <div className="relative w-16 h-24 flex-shrink-0 bg-secondary rounded-lg overflow-hidden border border-border">
+                    <img
+                      src={formData.imageUrl}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200">
+          <div className="flex items-center justify-end space-x-3 p-6 border-t border-border">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 text-muted-foreground hover:text-main hover:bg-page transition-colors rounded-lg"
               disabled={isSubmitting}
             >
               Cancel
@@ -620,7 +639,7 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               <Save className="h-4 w-4" />
               <span>{isSubmitting ? 'Saving...' : (isNew ? 'Create Entry' : 'Update Entry')}</span>

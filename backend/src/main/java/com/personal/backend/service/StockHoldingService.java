@@ -5,6 +5,9 @@ import com.personal.backend.dto.StockRequest;
 import com.personal.backend.util.ValidationResult;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.repository.StockTickerRepository;
+import com.personal.backend.repository.StockTickerRepository;
+import com.personal.backend.repository.StockTransactionRepository;
+import com.personal.backend.model.StockTransaction;
 import com.personal.backend.util.FinancialCalculationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +29,9 @@ import java.util.Optional;
 public class StockHoldingService {
     
     private final StockTickerRepository stockRepository;
+    private final StockTransactionRepository transactionRepository;
     private final FinancialValidator financialValidator;
-    private final FinnhubClient finnhubClient;
+    private final YahooFinanceService yahooFinanceService;
     
     @Value("${portfolio.max.positions.per.user:100}")
     private int maxPositionsPerUser;
@@ -460,6 +464,126 @@ public class StockHoldingService {
     }
 
 
+    /**
+     * Recalculate holdings based on transaction history
+     */
+    public PortfolioResponse<Integer> recalculateHoldings(Long userId) {
+        try {
+            log.info("Recalculating stock holdings for user {}", userId);
+            
+            if (userId == null || userId <= 0) {
+                return PortfolioResponse.validationError("Valid user ID is required");
+            }
+            
+            // 1. Fetch all transactions for user, ordered by date
+            List<StockTransaction> allTransactions = transactionRepository.findByUserIdOrderByTransactionDateDesc(userId); // Actually we need ASC for replay
+            
+            // We need to fetch all and sort in memory or use a different query method if DESC is default
+            // Let's sort them by date ASC to replay history
+            allTransactions.sort(java.util.Comparator.comparing(StockTransaction::getTransactionDate));
+            
+            // 2. Group by Symbol
+            Map<String, List<StockTransaction>> txnsBySymbol = allTransactions.stream()
+                    .collect(java.util.stream.Collectors.groupingBy(StockTransaction::getSymbol));
+            
+            int updatedCount = 0;
+            
+            // 3. Process each symbol
+            for (Map.Entry<String, List<StockTransaction>> entry : txnsBySymbol.entrySet()) {
+                String symbol = entry.getKey();
+                List<StockTransaction> txns = entry.getValue();
+                
+                BigDecimal totalQuantity = BigDecimal.ZERO;
+                BigDecimal totalCost = BigDecimal.ZERO;
+                BigDecimal averagePrice = BigDecimal.ZERO;
+                
+                for (StockTransaction txn : txns) {
+                    if (txn.getType() == StockTransaction.TransactionType.BUY) {
+                        // BUY: Increase Quantity, Increase Cost
+                        BigDecimal txnCost = txn.getTotalCost();
+                        // Handle legacy data where totalCost might be null? Should be enforced but safety first
+                        if (txnCost == null) {
+                            txnCost = txn.getQuantity().multiply(txn.getPricePerShare());
+                        }
+                        
+                        totalCost = totalCost.add(txnCost);
+                        totalQuantity = totalQuantity.add(txn.getQuantity());
+                        
+                        // Recalculate Average Price
+                        if (totalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+                            averagePrice = totalCost.divide(totalQuantity, 4, java.math.RoundingMode.HALF_UP);
+                        }
+                        
+                    } else if (txn.getType() == StockTransaction.TransactionType.SELL) {
+                        // SELL: Reduce Quantity, Cost Basis reduces proportionally
+                        // Cost removed = Qty Sold * Average Price
+                        BigDecimal costRemoved = txn.getQuantity().multiply(averagePrice);
+                        
+                        totalCost = totalCost.subtract(costRemoved);
+                        totalQuantity = totalQuantity.subtract(txn.getQuantity());
+                        
+                        // Average Price stays the same (mathematically) during a sell
+                        // If fully sold, reset
+                        if (totalQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+                            totalQuantity = BigDecimal.ZERO;
+                            totalCost = BigDecimal.ZERO;
+                            averagePrice = BigDecimal.ZERO;
+                        }
+                    }
+                }
+                
+                // 4. Update or Create StockTicker
+                if (totalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+                    Optional<StockTicker> existing = stockRepository.findByUserIdAndSymbol(userId, symbol);
+                    StockTicker ticker;
+                    
+                    if (existing.isPresent()) {
+                        ticker = existing.get();
+                        // Only update if changed
+                        if (ticker.getQuantity().compareTo(totalQuantity) != 0 || 
+                            ticker.getPurchasePrice().compareTo(averagePrice) != 0) {
+                            
+                            log.info("Updating {} for user {}: Qty {} -> {}, AvgPrice {} -> {}", 
+                                    symbol, userId, ticker.getQuantity(), totalQuantity, ticker.getPurchasePrice(), averagePrice);
+                                    
+                            ticker.setQuantity(totalQuantity);
+                            ticker.setPurchasePrice(averagePrice);
+                            ticker.setUpdatedAt(LocalDateTime.now());
+                            stockRepository.save(ticker);
+                            updatedCount++;
+                        }
+                    } else {
+                        // Should be rare if we are rebuilding, but maybe a holding was deleted manually but txns remain
+                        log.info("Restoring {} for user {}: Qty {}, AvgPrice {}", symbol, userId, totalQuantity, averagePrice);
+                        ticker = StockTicker.builder()
+                                .userId(userId)
+                                .symbol(symbol)
+                                .quantity(totalQuantity)
+                                .purchasePrice(averagePrice)
+                                .notes("Restored via Recalculation")
+                                .build();
+                        stockRepository.save(ticker);
+                        updatedCount++;
+                    }
+                } else {
+                    // Position is closed (0 qty). Ensure it's removed from Holdings if it exists
+                    Optional<StockTicker> existing = stockRepository.findByUserIdAndSymbol(userId, symbol);
+                    if (existing.isPresent()) {
+                        log.info("Removing closed position {} for user {}", symbol, userId);
+                        stockRepository.delete(existing.get());
+                        updatedCount++;
+                    }
+                }
+            }
+            
+            return PortfolioResponse.success(updatedCount, "Recalculated " + updatedCount + " holdings");
+            
+        } catch (Exception e) {
+            log.error("Error recalculating holdings for user {}: {}", userId, e.getMessage(), e);
+            return PortfolioResponse.error("Recalculation failed: " + e.getMessage());
+        }
+    }
+
     private void updatePriceIfStale(StockTicker ticker) {
         // Price is stale if null or older than 15 minutes
         boolean isStale = ticker.getCurrentPrice() == null || 
@@ -467,43 +591,24 @@ public class StockHoldingService {
                           ticker.getLastPriceUpdate().isBefore(LocalDateTime.now().minusMinutes(15));
 
         if (isStale) {
-            int maxRetries = 3;
-            long backoffMs = 500; // Start with 500ms
-            
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    MarketData marketData = finnhubClient.getStockQuote(ticker.getSymbol()).block();
-                    if (marketData != null && marketData.getCurrentPrice() != null && 
-                        marketData.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0) {
-                        ticker.setCurrentPrice(marketData.getCurrentPrice());
-                        ticker.setDailyChange(marketData.getDailyChange());
-                        ticker.setDailyChangePercentage(marketData.getDailyChangePercentage());
-                        ticker.setLastPriceUpdate(LocalDateTime.now());
-                        ticker.setIsMarketOpen(marketData.getIsMarketOpen());
-                        stockRepository.save(ticker);
-                        log.debug("Updated price for {} on attempt {}: ${}", 
-                                 ticker.getSymbol(), attempt, marketData.getCurrentPrice());
-                        return; // Success!
-                    } else {
-                        log.warn("Received null or invalid price for {} on attempt {}/{}", 
-                                ticker.getSymbol(), attempt, maxRetries);
-                    }
-                } catch (Exception e) {
-                    if (attempt < maxRetries) {
-                        log.warn("Failed to fetch price for {} (attempt {}/{}): {}. Retrying in {}ms...", 
-                                ticker.getSymbol(), attempt, maxRetries, e.getMessage(), backoffMs * attempt);
-                        try {
-                            Thread.sleep(backoffMs * attempt); // Exponential backoff: 500ms, 1000ms, 1500ms
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                            log.error("Interrupted while waiting to retry price fetch for {}", ticker.getSymbol());
-                            break;
-                        }
-                    } else {
-                        log.error("Failed to fetch price for {} after {} attempts: {}", 
-                                 ticker.getSymbol(), maxRetries, e.getMessage());
-                    }
+            try {
+                Optional<MarketData> marketDataOpt = yahooFinanceService.getMarketData(ticker.getSymbol());
+                if (marketDataOpt.isPresent()) {
+                    MarketData marketData = marketDataOpt.get();
+                    ticker.setCurrentPrice(marketData.getCurrentPrice());
+                    ticker.setDailyChange(marketData.getDailyChange());
+                    ticker.setDailyChangePercentage(marketData.getDailyChangePercentage());
+                    ticker.setLastPriceUpdate(LocalDateTime.now());
+                    ticker.setIsMarketOpen(marketData.getIsMarketOpen());
+                    stockRepository.save(ticker);
+                    log.debug("Updated price for {} using Yahoo Finance: ${}", 
+                             ticker.getSymbol(), marketData.getCurrentPrice());
+                } else {
+                    log.warn("Could not fetch price for {} from Yahoo Finance", ticker.getSymbol());
                 }
+            } catch (Exception e) {
+                log.error("Failed to fetch price for {} after attempts: {}", 
+                         ticker.getSymbol(), e.getMessage());
             }
         }
     }

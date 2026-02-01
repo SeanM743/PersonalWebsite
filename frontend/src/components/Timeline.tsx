@@ -173,9 +173,9 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
         // Calculate time range
         if (timelineData.length > 0) {
           const allTimestamps = timelineData
-            .filter((entry: LifeLogEntry) => entry.startDate)
+            .filter((entry: LifeLogEntry) => entry.startDate || entry.endDate)
             .flatMap((entry: LifeLogEntry) => {
-              const start = new Date(entry.startDate!).getTime();
+              const start = entry.startDate ? new Date(entry.startDate).getTime() : new Date(entry.endDate!).getTime();
               const end = entry.endDate ? new Date(entry.endDate).getTime() : start;
               return [start, end];
             });
@@ -203,7 +203,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
   // Calculate timeline positions and lane assignments
   const calculateTimelineLayout = useMemo(() => {
     const filteredEntries = entries.filter(entry =>
-      selectedTypes.has(entry.type) && entry.startDate
+      selectedTypes.has(entry.type) && (entry.startDate || entry.endDate)
     );
 
     if (filteredEntries.length === 0) {
@@ -218,8 +218,18 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
 
     // Calculate positions and widths for entries
     const positionedEntries: TimelineEntry[] = filteredEntries.map(entry => {
-      const startDate = new Date(entry.startDate!);
-      const endDate = entry.endDate ? new Date(entry.endDate) : new Date();
+      // Logic for determining start/end:
+      // 1. Both present: Range [Start, End]
+      // 2. Only Start: Range [Start, Today] (Ongoing)
+      // 3. Only End: Point [End, End] (Single Event like Movie)
+
+      const startDate = entry.startDate
+        ? new Date(entry.startDate)
+        : new Date(entry.endDate!); // fallback to endDate if no start
+
+      const endDate = entry.endDate
+        ? new Date(entry.endDate)
+        : new Date(); // fallback to today if no end (ongoing)
 
       const startPosition = ((startDate.getTime() - timeRange.start.getTime()) / totalDuration) * timelineWidth;
       const endPosition = ((endDate.getTime() - timeRange.start.getTime()) / totalDuration) * timelineWidth;
@@ -636,6 +646,8 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                 const laneHeight = lane?.height || 60;
                 const isHovered = hoveredEntry === entry.id;
                 const isVisible = selectedTypes.has(entry.type);
+                const isTopLane = entry.lane === 0;
+                const isSmallEntry = entry.width < 5;
 
                 return (
                   <div
@@ -644,8 +656,8 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                       ? 'opacity-100 scale-100'
                       : 'opacity-0 scale-95 pointer-events-none'
                       } ${isHovered
-                        ? 'shadow-xl scale-110 z-20 ring-2 ring-white ring-opacity-50'
-                        : 'hover:shadow-lg hover:scale-105 hover:z-10'
+                        ? 'shadow-xl scale-110 z-50 ring-2 ring-white ring-opacity-50'
+                        : 'hover:shadow-lg hover:scale-105 hover:z-40'
                       }`}
                     style={{
                       left: `${entry.startPosition}%`,
@@ -653,29 +665,46 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                       width: `${entry.width}%`,
                       height: `${Math.min(laneHeight - 10, 50)}px`,
                       animationDelay: `${index * 30}ms`,
-                      transitionDelay: isVisible ? `${index * 20}ms` : '0ms'
+                      transitionDelay: isVisible ? `${index * 20}ms` : '0ms',
+                      // Ensure small entries have a minimum clickable area and visual presence
+                      minWidth: isSmallEntry ? '40px' : 'auto',
+                      overflow: 'visible' // Allow tooltip/text to break out
                     }}
                     onClick={() => handleEntryClick(entry)}
                     onMouseEnter={() => handleEntryHover(entry.id)}
                     onMouseLeave={() => handleEntryHover(null)}
                     title={`${entry.title} (${entry.type})`}
                   >
-                    <div className="flex items-center space-x-2 h-full">
+                    <div className="flex items-center space-x-2 h-full relative">
                       <div className="text-white flex-shrink-0 transition-transform duration-200 group-hover:scale-110">
                         {getIconForType(entry.type)}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-sm font-medium truncate transition-all duration-200">
+
+                      {/* Text Container - Logic for small entries */}
+                      <div className={`flex-1 min-w-0 ${isSmallEntry ? 'absolute left-8 w-48 z-10' : ''}`}>
+                        <div className={`text-white text-sm font-medium transition-all duration-200 ${isSmallEntry ? 'drop-shadow-md' : 'truncate'}`}>
                           {entry.title}
                         </div>
-                        <div className="text-white text-xs opacity-90 transition-opacity duration-200 group-hover:opacity-100">
-                          {entry.startDate && new Date(entry.startDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                          {entry.endDate && (
-                            <span className="ml-1">
-                              - {new Date(entry.endDate).toLocaleDateString('en-US', {
+                        <div className={`text-white text-xs opacity-90 transition-opacity duration-200 group-hover:opacity-100 ${isSmallEntry ? 'hidden group-hover:block drop-shadow-md' : ''}`}>
+                          {entry.startDate ? (
+                            <>
+                              {new Date(entry.startDate).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                              {entry.endDate && (
+                                <span className="ml-1">
+                                  - {new Date(entry.endDate).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            // Only end date (e.g. Movie)
+                            <span>
+                              {new Date(entry.endDate!).toLocaleDateString('en-US', {
                                 month: 'short',
                                 day: 'numeric'
                               })}
@@ -683,24 +712,34 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                           )}
                         </div>
                       </div>
-                      {/* Enhanced duration indicator */}
-                      {entry.width > 5 && entry.endDate && (
+
+                      {/* Enhanced duration indicator - Only for wide entries */}
+                      {!isSmallEntry && entry.startDate && entry.endDate && (
                         <div className="text-white text-xs opacity-75 flex-shrink-0 bg-black bg-opacity-20 px-1 rounded transition-all duration-200 group-hover:bg-opacity-30">
-                          {Math.ceil((new Date(entry.endDate).getTime() - new Date(entry.startDate!).getTime()) / (1000 * 60 * 60 * 24))}d
+                          {Math.ceil((new Date(entry.endDate).getTime() - new Date(entry.startDate).getTime()) / (1000 * 60 * 60 * 24))}d
                         </div>
                       )}
                     </div>
 
-                    {/* Enhanced hover tooltip */}
-                    <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg transition-all duration-200 pointer-events-none whitespace-nowrap z-30 ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+                    {/* Enhanced hover tooltip - Smart Positioning */}
+                    <div className={`absolute left-1/2 transform -translate-x-1/2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg transition-all duration-200 pointer-events-none whitespace-nowrap z-50 ${isHovered
+                      ? `opacity-100 ${isTopLane ? 'translate-y-0' : 'translate-y-0'}`
+                      : `opacity-0 ${isTopLane ? '-translate-y-1' : 'translate-y-1'}`
+                      } ${isTopLane
+                        ? 'top-full mt-3'
+                        : 'bottom-full mb-3'
                       }`}>
                       <div className="font-medium">{entry.title}</div>
                       <div className="text-gray-300 text-xs">
                         {entry.type} • Lane {entry.lane + 1}
                         {entry.rating && ` • ${entry.rating}/5 ⭐`}
                       </div>
-                      {/* Tooltip arrow */}
-                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+
+                      {/* Tooltip arrow - Smart direction */}
+                      <div className={`absolute left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-transparent ${isTopLane
+                        ? 'bottom-full border-b-4 border-b-gray-900' // Arrow points up
+                        : 'top-full border-t-4 border-t-gray-900'    // Arrow points down
+                        }`}></div>
                     </div>
 
                     {/* Click indicator */}
@@ -774,18 +813,24 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                 <h3 className="text-2xl font-bold text-gray-900 mb-1">{selectedEntry.title}</h3>
 
                 <div className="flex items-center space-x-4 text-sm text-gray-600 mt-2">
-                  {selectedEntry.startDate && (
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>
-                        {new Date(selectedEntry.startDate).toLocaleDateString('en-US', {
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="h-4 w-4" />
+                    <span>
+                      {selectedEntry.startDate ? (
+                        new Date(selectedEntry.startDate).toLocaleDateString('en-US', {
                           year: 'numeric',
                           month: 'long',
                           day: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                  )}
+                        })
+                      ) : (
+                        new Date(selectedEntry.endDate!).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                      )}
+                    </span>
+                  </div>
 
                   {selectedEntry.rating && (
                     <div className="flex items-center space-x-1">

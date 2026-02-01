@@ -203,53 +203,66 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
       </div>
 
       {/* Filters */}
-      {showFilters && (
-        <div className="mb-6 p-4 bg-page rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
-              <input
-                type="text"
-                placeholder="Search entries..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted"
-              />
-            </div>
+      <div className="mb-6 space-y-4">
+        {/* Type Tabs */}
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedType('ALL')}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedType === 'ALL'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              }`}
+          >
+            All
+          </button>
+          {Object.values(LifeLogType).map((type) => (
+            <button
+              key={type}
+              onClick={() => setSelectedType(type)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedType === type
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                }`}
+            >
+              {formatType(type)}
+            </button>
+          ))}
+        </div>
 
-            {/* Type Filter */}
-            <div className="relative">
-              <select
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value as LifeLogType | 'ALL')}
-                className="w-full px-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
-              >
-                <option value="ALL">All Types</option>
-                {Object.values(LifeLogType).map(type => (
-                  <option key={type} value={type}>{formatType(type)}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-            </div>
+        {/* Collapsible Search & Status Filters */}
+        {showFilters && (
+          <div className="p-4 bg-secondary/50 rounded-lg animate-in fade-in slide-in-from-top-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search entries..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder-muted-foreground"
+                />
+              </div>
 
-            {/* Status Filter */}
-            <div className="relative">
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value as EntryStatus | 'ALL')}
-                className="w-full px-4 py-2 bg-card border border-border rounded-lg text-main focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
-              >
-                <option value="ALL">All Statuses</option>
-                {Object.values(EntryStatus).map(status => (
-                  <option key={status} value={status}>{formatStatus(status)}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+              {/* Status Filter */}
+              <div className="relative">
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value as EntryStatus | 'ALL')}
+                  className="w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none"
+                >
+                  <option value="ALL">All Statuses</option>
+                  {Object.values(EntryStatus).map(status => (
+                    <option key={status} value={status}>{formatStatus(status)}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Entries List */}
       {entries.length > 0 ? (

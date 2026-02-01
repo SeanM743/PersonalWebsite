@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/apiService';
+import { usePortfolio } from '../../contexts/PortfolioContext';
 import LoadingSpinner from '../UI/LoadingSpinner';
 import {
     TrendingUp,
     TrendingDown,
     DollarSign
 } from 'lucide-react';
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer
+} from 'recharts';
 
 interface Holding {
     id: number;
@@ -31,7 +41,10 @@ const PortfolioOverview: React.FC = () => {
     const [completePortfolio, setCompletePortfolio] = useState<CompletePortfolioSummary | null>(null);
     const [holdings, setHoldings] = useState<Holding[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedPeriod, setSelectedPeriod] = useState('6M');
+    const [selectedPeriod, setSelectedPeriod] = useState('1M');
+
+    // Use Portfolio Context for history data
+    const { historyData, isHistoryLoading, loadHistory } = usePortfolio();
 
     const loadPortfolioData = async () => {
         try {
@@ -57,6 +70,13 @@ const PortfolioOverview: React.FC = () => {
     useEffect(() => {
         loadPortfolioData();
     }, []);
+
+    // Load history data when period changes (lazy loaded, not on mount)
+    useEffect(() => {
+        if (selectedPeriod) {
+            loadHistory(selectedPeriod);
+        }
+    }, [selectedPeriod, loadHistory]);
 
     // Calculate top holding by current value
     const topHolding = holdings.reduce((prev, current) => {
@@ -149,14 +169,13 @@ const PortfolioOverview: React.FC = () => {
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-main">Portfolio Performance</h2>
                     <div className="flex space-x-1 bg-page rounded-lg p-1 border border-border">
-                        {['1M', '3M', '6M', '1Y'].map((period) => (
+                        {['1M', '3M', '6M', '1Y', 'ALL'].map((period) => (
                             <button
                                 key={period}
                                 onClick={() => setSelectedPeriod(period)}
-                                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${selectedPeriod === period
-                                    ? 'bg-primary text-white'
-                                    : 'text-muted hover:text-main hover:bg-card'
-                                    }`}
+                                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${selectedPeriod === period
+                                    ? 'bg-primary text-white shadow-sm'
+                                    : 'text-muted hover:text-main hover:bg-muted/10'}`}
                             >
                                 {period}
                             </button>
@@ -164,30 +183,62 @@ const PortfolioOverview: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Performance metrics grid - using available data */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-4 bg-page rounded-lg border border-border">
-                        <div className="text-2xl font-bold text-muted">N/A</div>
-                        <div className="text-sm text-muted">This Month</div>
-                    </div>
-                    <div className="text-center p-4 bg-page rounded-lg border border-border">
-                        <div className="text-2xl font-bold text-muted">N/A</div>
-                        <div className="text-sm text-muted">This Quarter</div>
-                    </div>
-                    <div className="text-center p-4 bg-page rounded-lg border border-border">
-                        <div className={`text-2xl font-bold ${(completePortfolio?.stockPortfolio?.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                            {completePortfolio?.stockPortfolio?.totalGainLossPercentage ?
-                                `${(completePortfolio.stockPortfolio.totalGainLossPercentage >= 0 ? '+' : '')}${completePortfolio.stockPortfolio.totalGainLossPercentage.toFixed(1)}%` :
-                                'N/A'
-                            }
+                <div className="h-[300px] w-full">
+                    {isLoading && historyData.length === 0 ? (
+                        <div className="h-full flex items-center justify-center text-muted">
+                            <LoadingSpinner />
                         </div>
-                        <div className="text-sm text-muted">Total Return</div>
-                    </div>
-                    <div className="text-center p-4 bg-page rounded-lg border border-border">
-                        <div className="text-2xl font-bold text-primary">{holdings.length}</div>
-                        <div className="text-sm text-muted">Total Positions</div>
-                    </div>
+                    ) : historyData.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-muted">
+                            <TrendingUp className="h-12 w-12 mb-4 opacity-20" />
+                            <p>No history data available for this period</p>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart
+                                data={historyData}
+                                margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                            >
+                                <defs>
+                                    <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis
+                                    dataKey="date"
+                                    tickFormatter={(str) => {
+                                        const date = new Date(str);
+                                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                    }}
+                                    stroke="#6b7280"
+                                    fontSize={12}
+                                />
+                                <YAxis
+                                    tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact' })}`}
+                                    stroke="#6b7280"
+                                    fontSize={12}
+                                    domain={['auto', 'auto']}
+                                />
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.3} />
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem' }}
+                                    itemStyle={{ color: '#e5e7eb' }}
+                                    labelStyle={{ color: '#9ca3af' }}
+                                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
+                                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#8884d8"
+                                    fillOpacity={1}
+                                    fill="url(#colorValue)"
+                                    isAnimationActive={false}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
             </div>
 

@@ -32,6 +32,7 @@ public class PortfolioController {
     private final PortfolioService portfolioService;
     private final StockHoldingService stockHoldingService;
     private final StockTransactionService stockTransactionService;
+    private final com.personal.backend.service.HistoricalPortfolioService historicalPortfolioService;
     
     /**
      * Get portfolio summary with real-time market data
@@ -75,32 +76,11 @@ public class PortfolioController {
             Long userId = getUserIdFromAuthentication(authentication);
             log.info("Getting complete portfolio for user {} (detailed: {})", userId, detailed);
             
-            // Get stock portfolio summary
-            PortfolioResponse<PortfolioSummary> stockResponse = detailed ? 
-                    portfolioService.getDetailedPortfolioSummary(userId) :
-                    portfolioService.getPortfolioSummary(userId);
+            // Get complete portfolio summary from service
+            PortfolioResponse<CompletePortfolioSummary> response = portfolioService.getCompletePortfolioSummary(userId);
             
-            if (!stockResponse.isSuccess()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(PortfolioResponse.error("Failed to get stock portfolio: " + stockResponse.getError()));
-            }
-            
-            // Create complete portfolio with static holdings
-            CompletePortfolioSummary completePortfolio = CompletePortfolioSummary.createWithStaticHoldings(
-                    stockResponse.getData());
-            
-            PortfolioResponse<CompletePortfolioSummary> response = PortfolioResponse.success(
-                    completePortfolio, 
-                    "Complete portfolio retrieved successfully",
-                    Map.of(
-                        "includesStaticHoldings", true,
-                        "totalValue", completePortfolio.getTotalPortfolioValue(),
-                        "stockPositions", completePortfolio.getStockPortfolio().getTotalPositions(),
-                        "staticPositions", completePortfolio.getStaticHoldings().getHoldings().size()
-                    )
-            );
-            
-            return ResponseEntity.ok(response);
+            HttpStatus status = response.isSuccess() ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(response);
             
         } catch (Exception e) {
             log.error("Error getting complete portfolio: {}", e.getMessage(), e);
@@ -151,6 +131,30 @@ public class PortfolioController {
             
         } catch (Exception e) {
             log.error("Error getting portfolio performance: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
+    }
+    
+    /**
+     * Get portfolio history graph data
+     * GET /api/portfolio/history
+     */
+    @GetMapping("/history")
+    public ResponseEntity<PortfolioResponse<List<com.personal.backend.dto.PortfolioHistoryPoint>>> getPortfolioHistory(
+            @RequestParam(value = "period", defaultValue = "1M") String period,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            log.info("Getting portfolio history for user {} period {}", userId, period);
+            
+            PortfolioResponse<List<com.personal.backend.dto.PortfolioHistoryPoint>> response = portfolioService.getPortfolioHistory(userId, period);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error getting portfolio history: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
         }
@@ -416,6 +420,32 @@ public class PortfolioController {
         log.error("Security error: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(PortfolioResponse.error("Access denied: " + e.getMessage()));
+    }
+
+    /**
+     * Get reconstructed stock portfolio history (using historical market data)
+     * GET /api/portfolio/stock-history
+     */
+    @GetMapping("/stock-history")
+    public ResponseEntity<PortfolioResponse<List<com.personal.backend.dto.PortfolioHistoryPoint>>> getStockPortfolioHistory(
+            @RequestParam(value = "period", defaultValue = "1M") String period,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            log.info("Getting reconstructed stock portfolio history for user {} period {}", userId, period);
+            
+            // Blocking here since controller is synchronous. Ideally, use WebFlux properly.
+            List<com.personal.backend.dto.PortfolioHistoryPoint> history = 
+                    historicalPortfolioService.getReconstructedHistory(userId, period).block();
+            
+            return ResponseEntity.ok(PortfolioResponse.success(history, "Stock history retrieved successfully"));
+            
+        } catch (Exception e) {
+            log.error("Error getting stock portfolio history: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
     }
 
     /**

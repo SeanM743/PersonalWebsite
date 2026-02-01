@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  Home, 
-  TrendingUp, 
-  Calendar, 
-  FileText, 
-  MessageSquare, 
-  X 
+import { usePortfolio } from '../../contexts/PortfolioContext';
+import {
+  Home,
+  TrendingUp,
+  Calendar,
+  FileText,
+  MessageSquare,
+  X
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,11 +24,21 @@ const navigation = [
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const { prefetchHistory } = usePortfolio();
+
+  const handleNavClick = (href: string) => {
+    // Prefetch portfolio history when navigating to Portfolio
+    if (href === '/portfolio') {
+      prefetchHistory();
+    }
+    onClose();
+  };
+
   return (
     <>
       {/* Mobile overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 lg:hidden bg-gray-600 bg-opacity-75"
           onClick={onClose}
         />
@@ -57,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   className={({ isActive }) =>
                     `sidebar-item ${isActive ? 'active' : ''}`
                   }
-                  onClick={() => onClose()}
+                  onClick={() => handleNavClick(item.href)}
                 >
                   <item.icon className="h-5 w-5 mr-3" />
                   {item.name}

@@ -418,6 +418,17 @@ class ApiService {
     const response = await this.api.put(`/signals/family/${id}`, member);
     return response.data;
   }
+
+  // Portfolio History
+  async getPortfolioHistory(period: string = '1M') {
+    const response = await this.api.get(`/portfolio/history?period=${period}`);
+    return response.data;
+  }
+
+  async getStockHistory(period: string = '1M') {
+    const response = await this.api.get(`/portfolio/stock-history?period=${period}`);
+    return response.data;
+  }
 }
 
 export const apiService = new ApiService();

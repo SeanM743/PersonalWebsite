@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/apiService';
-import { TrendingUp, TrendingDown, DollarSign, History, Edit2, Wallet, Plus } from 'lucide-react';
+import { usePortfolio } from '../../contexts/PortfolioContext';
+import { TrendingUp, History, Edit2, Wallet, Plus } from 'lucide-react';
 
 import LoadingSpinner from '../UI/LoadingSpinner';
 import WatchlistWidget from './WatchlistWidget';
-import SandboxTab from './SandboxTab';
+
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 interface Account {
     id: number;
@@ -46,8 +48,12 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const [isLoading, setIsLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editBalance, setEditBalance] = useState(account.balance);
-    const [activeTab, setActiveTab] = useState<'holdings' | 'transactions' | 'sandbox'>('holdings');
+    const [activeTab, setActiveTab] = useState<'holdings' | 'transactions' | 'sandbox' | 'performance'>('holdings');
     const [isAddTxnOpen, setIsAddTxnOpen] = useState(false);
+
+    // Use Portfolio Context for performance graph data
+    const { historyData, isHistoryLoading, loadHistory } = usePortfolio();
+    const [historyPeriod, setHistoryPeriod] = useState('1M');
 
     // Transaction Form State
     const [txnSymbol, setTxnSymbol] = useState('');
@@ -64,6 +70,12 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
         }
     }, [account.id]);
 
+    useEffect(() => {
+        if (isStockAccount && activeTab === 'performance') {
+            loadHistory(historyPeriod);
+        }
+    }, [activeTab, historyPeriod, isStockAccount, loadHistory]);
+
     const loadStockData = async () => {
         setIsLoading(true);
         try {
@@ -72,8 +84,8 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                 apiService.getHoldings()
             ]);
 
-            if (txnsRes.success) setTransactions(txnsRes.data);
-            if (holdingsRes.success) setHoldings(holdingsRes.data);
+            if (txnsRes && (txnsRes as any).success) setTransactions((txnsRes as any).data);
+            if (holdingsRes && (holdingsRes as any).success) setHoldings((holdingsRes as any).data);
 
         } catch (e) {
             console.error("Failed to load stock data", e);
@@ -197,6 +209,12 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                                     Transactions
                                 </button>
                                 <button
+                                    onClick={() => setActiveTab('performance')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'performance' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
+                                >
+                                    Performance
+                                </button>
+                                <button
                                     onClick={() => setActiveTab('sandbox')}
                                     className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'sandbox' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
                                 >
@@ -276,6 +294,77 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                                                     ))}
                                                 </tbody>
                                             </table>
+                                        </div>
+                                    )}
+
+                                    {activeTab === 'performance' && (
+                                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <h3 className="text-lg font-semibold text-main">Portfolio Value Over Time</h3>
+                                                <div className="flex space-x-1 bg-page rounded-lg p-1 border border-border overflow-x-auto">
+                                                    {['1D', '5D', '1M', '6M', 'YTD', '1Y', '3Y', '5Y', 'ALL'].map((p) => (
+                                                        <button
+                                                            key={p}
+                                                            onClick={() => setHistoryPeriod(p)}
+                                                            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${historyPeriod === p
+                                                                ? 'bg-primary text-white shadow-sm'
+                                                                : 'text-muted hover:text-main hover:bg-muted/10'}`}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="h-[400px] w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <AreaChart
+                                                        data={historyData}
+                                                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                                                    >
+                                                        <defs>
+                                                            <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                                        <XAxis
+                                                            dataKey="date"
+                                                            tickFormatter={(str) => {
+                                                                const date = new Date(str);
+                                                                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: historyPeriod === 'ALL' || historyPeriod === '5Y' ? '2-digit' : undefined });
+                                                            }}
+                                                            stroke="#9ca3af"
+                                                            fontSize={12}
+                                                            tickMargin={10}
+                                                            minTickGap={30}
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact' })}`}
+                                                            stroke="#9ca3af"
+                                                            fontSize={12}
+                                                            domain={['auto', 'auto']}
+                                                        />
+                                                        <Tooltip
+                                                            contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                                            itemStyle={{ color: '#e5e7eb' }}
+                                                            labelStyle={{ color: '#9ca3af', marginBottom: '0.25rem' }}
+                                                            formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
+                                                            labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { dateStyle: 'full' })}
+                                                        />
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey="value"
+                                                            stroke="#3b82f6"
+                                                            strokeWidth={2}
+                                                            fillOpacity={1}
+                                                            fill="url(#colorVal)"
+                                                            activeDot={{ r: 6, strokeWidth: 0 }}
+                                                        />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            </div>
                                         </div>
                                     )}
 

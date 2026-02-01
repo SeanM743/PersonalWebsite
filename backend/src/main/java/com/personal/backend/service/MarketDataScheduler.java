@@ -16,7 +16,9 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,7 +32,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Slf4j
 public class MarketDataScheduler {
     
-    private final FinnhubClient finnhubClient;
+    private final YahooFinanceService yahooFinanceService;
     private final MarketDataCacheManager cacheManager;
     private final StockTickerRepository stockRepository;
     private final MarketHoursUtil marketHoursUtil;
@@ -171,34 +173,29 @@ public class MarketDataScheduler {
      * Update market data for batch of symbols
      */
     private Mono<Integer> updateMarketDataBatch(List<String> symbols) {
-        return Flux.fromIterable(symbols)
-                .buffer(batchSize)
-                .flatMap(batch -> {
-                    log.debug("Processing batch of {} symbols", batch.size());
-                    
-                    return finnhubClient.getStockQuotes(batch)
-                            .collectList()
-                            .map(marketDataList -> {
-                                // Cache the results
-                                cacheManager.cacheMarketDataBatch(marketDataList);
-                                
-                                // Count successful updates
-                                int successCount = (int) marketDataList.stream()
-                                        .filter(data -> !data.hasError())
-                                        .count();
-                                
-                                log.debug("Batch update completed: {}/{} successful", 
-                                        successCount, marketDataList.size());
-                                
-                                return successCount;
-                            })
-                            .onErrorResume(error -> {
-                                log.error("Batch update failed for {} symbols: {}", 
-                                        batch.size(), error.getMessage());
-                                return Mono.just(0);
-                            });
-                })
-                .reduce(0, Integer::sum);
+        return Mono.fromCallable(() -> {
+            log.debug("Processing batch of {} symbols", symbols.size());
+            
+            Map<String, MarketData> marketDataMap = yahooFinanceService.getBatchMarketData(symbols);
+            List<MarketData> marketDataList = new ArrayList<>(marketDataMap.values());
+            
+            // Cache the results
+            cacheManager.cacheMarketDataBatch(marketDataList);
+            
+            // Count successful updates
+            int successCount = (int) marketDataList.stream()
+                    .filter(data -> !data.hasError())
+                    .count();
+            
+            log.debug("Batch update completed: {}/{} successful", 
+                    successCount, symbols.size());
+            
+            return successCount;
+        }).onErrorResume(error -> {
+            log.error("Batch update failed for {} symbols: {}", 
+                    symbols.size(), error.getMessage());
+            return Mono.just(0);
+        });
     }
     
     /**

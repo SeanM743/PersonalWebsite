@@ -106,7 +106,7 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
       // Clear cache for this key to ensure fresh data
       apiService.clearCacheKey(`quick-fact-details-${formData.key.trim()}`);
       apiService.clearCacheKey('quick-facts');
-      
+
       // First save the fact with new data
       await apiService.updateQuickFacts({
         key: formData.key.trim(),
@@ -137,16 +137,16 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-card rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-border">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-main">
               {isNew ? 'Add New Quick Fact' : 'Edit Quick Fact'}
             </h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-muted hover:text-main transition-colors"
             >
               <X className="h-6 w-6" />
             </button>
@@ -156,7 +156,7 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
             {/* Form Section */}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-main mb-2">
                   Key/Label
                 </label>
                 <input
@@ -164,19 +164,19 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
                   value={formData.key}
                   onChange={(e) => setFormData(prev => ({ ...prev, key: e.target.value }))}
                   placeholder="e.g., Currently Reading, Recently Watched"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-main placeholder-muted"
                   disabled={!isNew} // Don't allow editing key for existing facts
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-main mb-2">
                   Category
                 </label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-main"
                 >
                   {categories.map(category => (
                     <option key={category.value} value={category.value}>
@@ -187,7 +187,7 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-main mb-2">
                   <div className="flex items-center space-x-2">
                     <selectedCategory.icon className="h-4 w-4" />
                     <span>Value</span>
@@ -198,9 +198,9 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
                   onChange={(e) => setFormData(prev => ({ ...prev, value: e.target.value }))}
                   placeholder={selectedCategory.placeholder}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-page border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-main placeholder-muted"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted mt-1">
                   {selectedCategory.value === 'reading' && 'Enter book title (e.g., "Ender\'s Game" or "Ender\'s Game by Orson Scott Card")'}
                   {selectedCategory.value === 'recently watched' && 'Enter movie title for automatic movie details'}
                   {selectedCategory.value === 'listening to' && 'Format: "Song by Artist" for automatic music details'}
@@ -224,7 +224,7 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
                     'Preview & Enrich'
                   )}
                 </button>
-                
+
                 <button
                   onClick={handleSave}
                   disabled={isSaving || isEnriching}
@@ -246,9 +246,9 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
             </div>
 
             {/* Preview Section */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Preview</h3>
-              
+            <div className="bg-page rounded-lg p-4 border border-border">
+              <h3 className="text-sm font-medium text-main mb-3">Preview</h3>
+
               {previewData ? (
                 <div className="space-y-4">
                   {/* Image Preview */}
@@ -266,27 +266,27 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
                   )}
 
                   {/* Basic Info */}
-                  <div className="bg-white rounded-lg p-3">
+                  <div className="bg-card rounded-lg p-3 border border-border">
                     <div className="grid grid-cols-1 gap-2">
                       <div>
-                        <span className="text-xs font-medium text-gray-500">Key:</span>
-                        <p className="text-sm text-gray-900">{previewData.key}</p>
+                        <span className="text-xs font-medium text-muted">Key:</span>
+                        <p className="text-sm text-main">{previewData.key}</p>
                       </div>
                       <div>
-                        <span className="text-xs font-medium text-gray-500">Value:</span>
-                        <p className="text-sm text-gray-900">{previewData.value}</p>
+                        <span className="text-xs font-medium text-muted">Value:</span>
+                        <p className="text-sm text-main">{previewData.value}</p>
                       </div>
                       <div>
-                        <span className="text-xs font-medium text-gray-500">Category:</span>
-                        <p className="text-sm text-gray-900 capitalize">{previewData.category}</p>
+                        <span className="text-xs font-medium text-muted">Category:</span>
+                        <p className="text-sm text-main capitalize">{previewData.category}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Enriched Data */}
                   {previewData.metadata && (
-                    <div className="bg-white rounded-lg p-3">
-                      <h4 className="text-xs font-medium text-gray-500 mb-2">Enriched Details</h4>
+                    <div className="bg-card rounded-lg p-3 border border-border">
+                      <h4 className="text-xs font-medium text-muted mb-2">Enriched Details</h4>
                       {(() => {
                         try {
                           const metadata = JSON.parse(previewData.metadata);
@@ -294,32 +294,32 @@ const QuickFactEditModal: React.FC<QuickFactEditModalProps> = ({
                             <div className="space-y-1">
                               {Object.entries(metadata).map(([key, value]) => (
                                 <div key={key} className="flex justify-between">
-                                  <span className="text-xs text-gray-500 capitalize">
+                                  <span className="text-xs text-muted capitalize">
                                     {key.replace(/([A-Z])/g, ' $1').trim()}:
                                   </span>
-                                  <span className="text-xs text-gray-900">{String(value)}</span>
+                                  <span className="text-xs text-main">{String(value)}</span>
                                 </div>
                               ))}
                             </div>
                           );
                         } catch {
-                          return <p className="text-xs text-gray-500">Unable to parse metadata</p>;
+                          return <p className="text-xs text-muted">Unable to parse metadata</p>;
                         }
                       })()}
                     </div>
                   )}
 
                   {/* Status */}
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted">
                     {previewData.isEnriched ? (
-                      <span className="text-green-600">✓ Enhanced with external data</span>
+                      <span className="text-green-500">✓ Enhanced with external data</span>
                     ) : (
-                      <span className="text-gray-500">• Basic information only</span>
+                      <span className="text-muted">• Basic information only</span>
                     )}
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted">
                   <p className="text-sm">Fill in the form and click "Preview & Enrich" to see how your quick fact will look with enriched data.</p>
                 </div>
               )}

@@ -41,6 +41,10 @@ public class PortfolioSummary {
     public BigDecimal getCurrentValue() {
         return totalValue;
     }
+
+    public BigDecimal getTotalPortfolioValue() {
+        return totalValue;
+    }
     
     public void setCurrentValue(BigDecimal currentValue) {
         this.totalValue = currentValue;

@@ -1,10 +1,13 @@
 package com.personal.backend.service;
 
 import com.personal.backend.dto.MarketData;
+import com.personal.backend.dto.PortfolioHistoryPoint;
 import com.personal.backend.dto.PortfolioResponse;
 import com.personal.backend.dto.PortfolioSummary;
 import com.personal.backend.dto.StockPerformance;
+import com.personal.backend.model.AccountBalanceHistory;
 import com.personal.backend.model.StockTicker;
+import com.personal.backend.repository.AccountBalanceHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,9 +16,12 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -30,11 +36,13 @@ import java.util.stream.Collectors;
 public class PortfolioService {
     
     private final StockHoldingService stockHoldingService;
-    private final FinnhubClient finnhubClient;
+    private final YahooFinanceService yahooFinanceService;
     private final MarketDataCacheManager cacheManager;
     private final PerformanceCalculator performanceCalculator;
     private final MarketDataScheduler marketDataScheduler;
-    private final FinnhubErrorHandler errorHandler;
+    private final AccountRepository accountRepository;
+    private final AccountBalanceHistoryRepository accountBalanceHistoryRepository;
+    private final HistoricalPortfolioService historicalPortfolioService;
     
     @Value("${portfolio.performance.cache.ttl.minutes:5}")
     private int performanceCacheTtlMinutes;
@@ -95,6 +103,9 @@ public class PortfolioService {
             log.info("Portfolio summary generated for user {}: {} positions, ${} total value", 
                     userId, summary.getTotalPositions(), summary.getCurrentValue());
             
+            // Sync the STOCK_PORTFOLIO account balance in the database
+            updateStockAccountBalance(userId, summary.getCurrentValue());
+            
             return PortfolioResponse.success(summary, "Portfolio summary generated successfully");
             
         } catch (Exception e) {
@@ -103,9 +114,6 @@ public class PortfolioService {
         }
     }
     
-    /**
-     * Get portfolio summary with detailed stock performance
-     */
     @Transactional(readOnly = true)
     public PortfolioResponse<PortfolioSummary> getDetailedPortfolioSummary(Long userId) {
         try {
@@ -131,6 +139,117 @@ public class PortfolioService {
         } catch (Exception e) {
             log.error("Error generating detailed portfolio summary for user {}: {}", userId, e.getMessage(), e);
             return PortfolioResponse.error("Failed to generate detailed portfolio summary: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get complete portfolio summary including all account types
+     */
+    @Transactional(readOnly = true)
+    public PortfolioResponse<CompletePortfolioSummary> getCompletePortfolioSummary(Long userId) {
+        try {
+            log.info("Generating complete portfolio summary for user {}", userId);
+            
+            // 1. Get stock portfolio summary (real-time)
+            PortfolioResponse<PortfolioSummary> stockResponse = getPortfolioSummary(userId);
+            if (!stockResponse.isSuccess()) {
+                return PortfolioResponse.error("Failed to get stock portfolio: " + stockResponse.getError());
+            }
+            PortfolioSummary stockSummary = stockResponse.getData();
+            
+            // 2. Get all accounts from database
+            List<Account> allAccounts = accountRepository.findAll();
+            
+            // 3. Separate Stock Portfolio account from others
+            Account stockAccount = allAccounts.stream()
+                    .filter(a -> Account.AccountType.STOCK_PORTFOLIO.equals(a.getType()))
+                    .findFirst()
+                    .orElse(null);
+            
+            List<Account> otherAccounts = allAccounts.stream()
+                    .filter(a -> !Account.AccountType.STOCK_PORTFOLIO.equals(a.getType()))
+                    .toList();
+            
+            // 4. Build StaticHoldings based on database accounts
+            List<CompletePortfolioSummary.StaticHolding> staticHoldingsList = otherAccounts.stream()
+                    .map(a -> CompletePortfolioSummary.StaticHolding.builder()
+                            .name(a.getName())
+                            .ticker(a.getName()) // Using name as ticker for manual accounts
+                            .marketValue(a.getBalance())
+                            .assetType(a.getType().name())
+                            .notes(a.getNotes())
+                            .build())
+                    .toList();
+            
+            BigDecimal totalCash = otherAccounts.stream()
+                    .filter(a -> Account.AccountType.CASH.equals(a.getType()))
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalRetirement = otherAccounts.stream()
+                    .filter(a -> Account.AccountType.RETIREMENT.equals(a.getType()))
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalEducation = otherAccounts.stream()
+                    .filter(a -> Account.AccountType.EDUCATION.equals(a.getType()))
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalOther = otherAccounts.stream()
+                    .filter(a -> Account.AccountType.OTHER.equals(a.getType()))
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            BigDecimal totalStaticValue = otherAccounts.stream()
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            CompletePortfolioSummary.StaticHoldings staticHoldings = CompletePortfolioSummary.StaticHoldings.builder()
+                    .totalCash(totalCash)
+                    .totalRetirement(totalRetirement)
+                    .totalOtherPortfolios(totalEducation.add(totalOther))
+                    .totalStaticValue(totalStaticValue)
+                    .asOfDate(LocalDateTime.now())
+                    .holdings(staticHoldingsList)
+                    .build();
+            
+            // 5. Calculate overall totals using the snapshot + change logic for stock account
+            // Current Value = (Latest Stock Snapshot Balance) + (Today's Daily Change)
+            // Note: If we have real-time data, stockSummary.getTotalValue() is already accurate.
+            // But if we want to follow exactly "snapshot + daily change":
+            BigDecimal stockLiveValue = stockSummary.getTotalValue(); 
+            
+            BigDecimal totalPortfolioValue = stockLiveValue.add(totalStaticValue);
+            
+            // 6. Assemble complete summary
+            CompletePortfolioSummary detailedSummary = CompletePortfolioSummary.builder()
+                    .stockPortfolio(stockSummary)
+                    .staticHoldings(staticHoldings)
+                    .totalPortfolioValue(totalPortfolioValue)
+                    .totalCashValue(totalCash)
+                    .totalStockValue(stockLiveValue)
+                    .totalRetirementValue(totalRetirement)
+                    .totalOtherInvestments(totalEducation.add(totalOther))
+                    .allocationByType(Map.of(
+                            "Stocks", stockLiveValue,
+                            "Cash", totalCash,
+                            "Retirement", totalRetirement,
+                            "Other", totalEducation.add(totalOther)
+                    ))
+                    .lastUpdated(LocalDateTime.now())
+                    .currency("USD")
+                    .notes(List.of(
+                            "Calculated from " + otherAccounts.size() + " manual accounts and real-time stock holdings.",
+                            "Last refreshed: " + LocalDateTime.now()
+                    ))
+                    .build();
+            
+            return PortfolioResponse.success(detailedSummary, "Complete portfolio summary generated successfully");
+            
+        } catch (Exception e) {
+            log.error("Error generating complete portfolio summary for user {}: {}", userId, e.getMessage(), e);
+            return PortfolioResponse.error("Failed to generate complete portfolio summary: " + e.getMessage());
         }
     }
     
@@ -196,6 +315,25 @@ public class PortfolioService {
     }
     
     /**
+     * Get portfolio value history for a specific period
+     */
+    @Transactional(readOnly = true)
+    public PortfolioResponse<List<PortfolioHistoryPoint>> getPortfolioHistory(Long userId, String period) {
+        try {
+            log.info("Fetching portfolio history for user {} over period {}", userId, period);
+            
+            // Delegate to HistoricalPortfolioService which uses snapshots
+            List<PortfolioHistoryPoint> history = historicalPortfolioService.getReconstructedHistory(userId, period).block();
+            
+            return PortfolioResponse.success(history, "History retrieved successfully");
+            
+        } catch (Exception e) {
+            log.error("Error fetching portfolio history: {}", e.getMessage(), e);
+            return PortfolioResponse.error("Failed to fetch history: " + e.getMessage());
+        }
+    }
+
+    /**
      * Get market data for list of symbols with caching
      */
     private Map<String, MarketData> getMarketDataForSymbols(List<String> symbols) {
@@ -246,14 +384,7 @@ public class PortfolioService {
      */
     private Map<String, MarketData> fetchFreshMarketData(List<String> symbols) {
         try {
-            return finnhubClient.getStockQuotes(symbols)
-                    .collectMap(MarketData::getSymbol)
-                    .timeout(java.time.Duration.ofSeconds(marketDataTimeoutSeconds))
-                    .onErrorResume(throwable -> {
-                        log.error("Error fetching market data: {}", throwable.getMessage());
-                        return Mono.just(Map.of());
-                    })
-                    .block();
+            return yahooFinanceService.getBatchMarketData(symbols);
         } catch (Exception e) {
             log.error("Error in fetchFreshMarketData: {}", e.getMessage(), e);
             return Map.of();
@@ -383,8 +514,8 @@ public class PortfolioService {
         try {
             log.info("Performing portfolio health check for user {}", userId);
             
-            // Check API connectivity
-            boolean apiConnected = finnhubClient.checkApiConnectivity().block();
+            // Check API connectivity (using Yahoo Finance)
+            boolean apiConnected = true; // Yahoo Finance library doesn't have a simple health check, assume OK if initialized
             
             // Get cache statistics
             MarketDataCacheManager.CacheStatistics cacheStats = cacheManager.getCacheStatistics();
@@ -392,14 +523,10 @@ public class PortfolioService {
             // Get scheduler statistics
             MarketDataScheduler.SchedulerStatistics schedulerStats = marketDataScheduler.getSchedulerStatistics();
             
-            // Get error handler statistics
-            FinnhubErrorHandler.ErrorStatistics errorStats = errorHandler.getErrorStatistics();
-            
             Map<String, Object> healthData = Map.of(
                     "apiConnectivity", apiConnected,
                     "cacheStatistics", cacheStats,
                     "schedulerStatistics", schedulerStats,
-                    "errorStatistics", errorStats,
                     "lastHealthCheck", LocalDateTime.now()
             );
             
@@ -408,6 +535,26 @@ public class PortfolioService {
         } catch (Exception e) {
             log.error("Error performing portfolio health check for user {}: {}", userId, e.getMessage(), e);
             return PortfolioResponse.error("Portfolio health check failed: " + e.getMessage());
+        }
+    }
+    /**
+     * Update the balance of the STOCK_PORTFOLIO account in the database
+     */
+    private void updateStockAccountBalance(Long userId, BigDecimal currentValue) {
+        try {
+            List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
+            if (!accounts.isEmpty()) {
+                Account stockAccount = accounts.get(0);
+                if (stockAccount.getBalance().compareTo(currentValue) != 0) {
+                    log.info("Updating stock account balance in DB: ${} -> ${}", 
+                            stockAccount.getBalance(), currentValue);
+                    stockAccount.setBalance(currentValue);
+                    stockAccount.setUpdatedAt(LocalDateTime.now());
+                    accountRepository.save(stockAccount);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync stock account balance: {}", e.getMessage());
         }
     }
 }

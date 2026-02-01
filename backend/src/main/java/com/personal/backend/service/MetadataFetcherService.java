@@ -134,7 +134,7 @@ public class MetadataFetcherService {
     
     public Optional<Object> fetchMetadataByType(String title, MediaType mediaType, String creator, String externalId) {
         log.debug("Fetching metadata for title: {}, type: {}, creator: {}, externalId: {}", 
-                 title, mediaType, creator, externalId);
+                  title, mediaType, creator, externalId);
         
         switch (mediaType) {
             case BOOK:

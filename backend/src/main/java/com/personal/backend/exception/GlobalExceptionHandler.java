@@ -105,7 +105,7 @@ public class GlobalExceptionHandler {
         
         log.error("Unexpected error", ex);
         ContentResponse<Void> response = ContentResponse.error(
-                "An unexpected error occurred. Please try again later.");
+                "An unexpected error occurred: " + ex.toString());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 }
