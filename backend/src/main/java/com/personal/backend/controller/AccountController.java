@@ -46,4 +46,35 @@ public class AccountController {
             return ResponseEntity.notFound().build();
         }
     }
+    
+    @PutMapping("/{id}")
+    public ResponseEntity<AccountResponse<Account>> updateAccount(@PathVariable Long id, @RequestBody Account account) {
+        try {
+            Account updated = accountService.updateAccount(id, account);
+            return ResponseEntity.ok(AccountResponse.success(updated, "Account updated successfully"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(AccountResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping
+    public ResponseEntity<AccountResponse<Account>> createAccount(@RequestBody Account account) {
+        try {
+            Account created = accountService.createAccount(account);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                    .body(AccountResponse.success(created, "Account created successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(AccountResponse.error("Failed to create account: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<AccountResponse<Void>> deleteAccount(@PathVariable Long id) {
+        try {
+            accountService.deleteAccount(id);
+            return ResponseEntity.ok(AccountResponse.success(null, "Account deleted successfully"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(AccountResponse.error(e.getMessage()));
+        }
+    }
 }

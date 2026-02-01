@@ -26,6 +26,7 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final AccountBalanceHistoryRepository historyRepository;
     private final StockHoldingService stockHoldingService;
+    private final StockTickerRepository stockTickerRepository;
 
     /**
      * Get all accounts for a user (Currently single user system, so just get all)
@@ -61,17 +62,19 @@ public class AccountService {
         return accountOpt;
     }
 
+    /**
+     * Calculate total stock portfolio value using optimized single-query approach
+     * This replaces the N+1 query pattern that went through StockHoldingService
+     */
     private BigDecimal calculateTotalStockValue(Long userId) {
-        // Use StockHoldingService to get holdings with updated prices
-        com.personal.backend.dto.PortfolioResponse<List<StockTicker>> response = stockHoldingService.getUserStockHoldings(userId);
-        
-        if (response.isSuccess()) {
-            return response.getData().stream()
-                    .map(StockTicker::getCurrentValue)
-                    .filter(val -> val != null)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        try {
+            BigDecimal totalValue = stockTickerRepository.getTotalCurrentValueByUserId(userId);
+            log.debug("Calculated total stock value for user {}: {}", userId, totalValue);
+            return totalValue != null ? totalValue : BigDecimal.ZERO;
+        } catch (Exception e) {
+            log.error("Error calculating total stock value for user {}: {}", userId, e.getMessage());
+            return BigDecimal.ZERO;
         }
-        return BigDecimal.ZERO;
     }
     
     /**
@@ -88,6 +91,30 @@ public class AccountService {
         recordDailySnapshot(account);
         
         return account;
+    }
+    
+    /**
+     * Update account details (name, type, balance, notes)
+     */
+    public Account updateAccount(Long id, Account details) {
+        Account account = accountRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Account not found"));
+                
+        // Protect system accounts from critical changes
+        if (account.getType() == Account.AccountType.STOCK_PORTFOLIO) {
+            // Only allow updating notes for stock portfolio
+            account.setNotes(details.getNotes());
+        } else {
+            account.setName(details.getName());
+            account.setType(details.getType());
+            account.setBalance(details.getBalance());
+            account.setNotes(details.getNotes());
+            
+            // Record snapshot if balance changed
+            recordDailySnapshot(account);
+        }
+        
+        return accountRepository.save(account);
     }
     
     /**

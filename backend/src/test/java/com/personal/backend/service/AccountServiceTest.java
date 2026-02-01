@@ -5,6 +5,7 @@ import com.personal.backend.model.Account;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.repository.AccountBalanceHistoryRepository;
 import com.personal.backend.repository.AccountRepository;
+import com.personal.backend.repository.StockTickerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,13 +34,15 @@ public class AccountServiceTest {
 
     @Mock
     private StockHoldingService stockHoldingService;
+    
+    @Mock
+    private StockTickerRepository stockTickerRepository;
 
     @InjectMocks
     private AccountService accountService;
 
     private Account stockPortfolioAccount;
     private Account cashAccount;
-    private List<StockTicker> mockHoldings;
 
     @BeforeEach
     void setUp() {
@@ -59,35 +62,18 @@ public class AccountServiceTest {
         cashAccount.setBalance(new BigDecimal("394828.35"));
         cashAccount.setUpdatedAt(LocalDateTime.now());
 
-        // Create mock stock holdings
-        StockTicker amzn = new StockTicker();
-        amzn.setSymbol("AMZN");
-        amzn.setQuantity(new BigDecimal("1000"));
-        amzn.setCurrentPrice(new BigDecimal("200.50"));
-        // getCurrentValue() should return 1000 * 200.50 = 200,500
-
-        StockTicker googl = new StockTicker();
-        googl.setSymbol("GOOGL");
-        googl.setQuantity(new BigDecimal("500"));
-        googl.setCurrentPrice(new BigDecimal("150.00"));
-        // getCurrentValue() should return 500 * 150.00 = 75,000
-
-        StockTicker aapl = new StockTicker();
-        aapl.setSymbol("AAPL");
-        aapl.setQuantity(new BigDecimal("2000"));
-        aapl.setCurrentPrice(new BigDecimal("175.25"));
-        // getCurrentValue() should return 2000 * 175.25 = 350,500
-
-        mockHoldings = Arrays.asList(amzn, googl, aapl);
-        // Total portfolio value should be: 200,500 + 75,000 + 350,500 = 626,000
+        // Note: mockHoldings removed - tests now mock stockTickerRepository.getTotalCurrentValueByUserId() directly
+        // Expected portfolio value based on original holdings: 626,000
+        // (AMZN: 1000 * 200.50 = 200,500) + (GOOGL: 500 * 150 = 75,000) + (AAPL: 2000 * 175.25 = 350,500)
     }
 
     @Test
     void testGetAllAccounts_CalculatesStockPortfolioValueCorrectly() {
         // Arrange
         when(accountRepository.findAll()).thenReturn(Arrays.asList(stockPortfolioAccount, cashAccount));
-        when(stockHoldingService.getUserStockHoldings(1L))
-                .thenReturn(PortfolioResponse.success(mockHoldings, "Success"));
+        // Mock the optimized repository query that replaced the StockHoldingService call
+        when(stockTickerRepository.getTotalCurrentValueByUserId(1L))
+                .thenReturn(new BigDecimal("626000.00"));
 
         // Act
         List<Account> accounts = accountService.getAllAccounts();
@@ -108,21 +94,18 @@ public class AccountServiceTest {
         assertEquals(0, expectedValue.compareTo(stockAccount.getBalance()),
                 "Stock portfolio balance should be " + expectedValue + " but was " + stockAccount.getBalance());
 
-        // Verify that stockHoldingService was called
-        verify(stockHoldingService, times(1)).getUserStockHoldings(1L);
+        // Verify that stockTickerRepository query was called (not StockHoldingService)
+        verify(stockTickerRepository, times(1)).getTotalCurrentValueByUserId(1L);
     }
 
     @Test
     void testGetAllAccounts_HandlesNullCurrentValue() {
-        // Arrange
-        StockTicker tickerWithNullPrice = new StockTicker();
-        tickerWithNullPrice.setSymbol("TEST");
-        tickerWithNullPrice.setQuantity(new BigDecimal("100"));
-        tickerWithNullPrice.setCurrentPrice(null); // getCurrentValue() will return null
-
+        // Arrange - when there are no holdings with valid prices, repository returns 0
         when(accountRepository.findAll()).thenReturn(Arrays.asList(stockPortfolioAccount));
-        when(stockHoldingService.getUserStockHoldings(1L))
-                .thenReturn(PortfolioResponse.success(Arrays.asList(mockHoldings.get(0), tickerWithNullPrice), "Success"));
+        // The repository query handles NULL prices by excluding them (WHERE currentPrice IS NOT NULL)
+        // Mock it returning only the valid holding value (AMZN = 200,500)
+        when(stockTickerRepository.getTotalCurrentValueByUserId(1L))
+                .thenReturn(new BigDecimal("200500.00"));
 
         // Act
         List<Account> accounts = accountService.getAllAccounts();
@@ -130,7 +113,7 @@ public class AccountServiceTest {
         // Assert
         Account stockAccount = accounts.get(0);
         
-        // Should only sum the valid holding (AMZN = 200,500), ignoring the null value
+        // Should only sum the valid holdings, repository query excludes null prices
         BigDecimal expectedValue = new BigDecimal("200500.00");
         assertEquals(0, expectedValue.compareTo(stockAccount.getBalance()),
                 "Stock portfolio should ignore holdings with null currentValue");
@@ -140,8 +123,8 @@ public class AccountServiceTest {
     void testGetAccount_CalculatesStockPortfolioValueCorrectly() {
         // Arrange
         when(accountRepository.findById(1L)).thenReturn(Optional.of(stockPortfolioAccount));
-        when(stockHoldingService.getUserStockHoldings(1L))
-                .thenReturn(PortfolioResponse.success(mockHoldings, "Success"));
+        when(stockTickerRepository.getTotalCurrentValueByUserId(1L))
+                .thenReturn(new BigDecimal("626000.00"));
 
         // Act
         Optional<Account> accountOpt = accountService.getAccount(1L);

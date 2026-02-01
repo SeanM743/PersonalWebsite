@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 public class MarketData {
     
     private String symbol;
+    private String companyName;
     private BigDecimal currentPrice;
     private BigDecimal previousClose;
     private BigDecimal dailyChange;

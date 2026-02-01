@@ -23,6 +23,10 @@ public class PortfolioSummary {
     private BigDecimal totalGainLossPercentage;
     private BigDecimal dailyChange;
     private BigDecimal dailyChangePercentage;
+    
+    // YTD Performance
+    private BigDecimal totalGainLossYTD;
+    private BigDecimal totalGainLossPercentageYTD;
     private Integer totalPositions;
     private Integer positionsUp;
     private Integer positionsDown;

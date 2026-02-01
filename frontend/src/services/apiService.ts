@@ -57,12 +57,12 @@ class ApiService {
   // Portfolio API - with caching
   async getPortfolio(detailed = false) {
     const cacheKey = `portfolio-${detailed}`;
-    return this.cachedGet(`/portfolio?detailed=${detailed}`, cacheKey, 2 * 60 * 1000); // 2 minutes
+    return this.cachedGet(`/portfolio?detailed=${detailed}`, cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
   async getCompletePortfolio(detailed = true) {
     const cacheKey = `complete-portfolio-${detailed}`;
-    return this.cachedGet(`/portfolio/complete?detailed=${detailed}`, cacheKey, 2 * 60 * 1000); // 2 minutes
+    return this.cachedGet(`/portfolio/complete?detailed=${detailed}`, cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
   async refreshPortfolio() {
@@ -84,7 +84,7 @@ class ApiService {
 
   async getHoldings() {
     const cacheKey = 'holdings';
-    return this.cachedGet('/portfolio/holdings', cacheKey, 2 * 60 * 1000); // 2 minutes
+    return this.cachedGet('/portfolio/holdings', cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
   async addHolding(holding: any) {
@@ -108,19 +108,23 @@ class ApiService {
   }
 
   async getTransactions() {
-    const response = await this.api.get('/portfolio/transactions');
-    return response.data;
+    const cacheKey = 'transactions';
+    return this.cachedGet('/portfolio/transactions', cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
   async addTransaction(transaction: any) {
+    // Clear caches when adding transaction
+    cacheService.delete('transactions');
+    cacheService.delete('holdings');
+    cacheService.delete('accounts');
     const response = await this.api.post('/portfolio/transactions', transaction);
     return response.data;
   }
 
   // Account API
   async getAccounts() {
-    const response = await this.api.get('/accounts');
-    return response.data;
+    const cacheKey = 'accounts';
+    return this.cachedGet('/accounts', cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
   async getAccount(id: number) {
@@ -129,16 +133,25 @@ class ApiService {
   }
 
   async createAccount(account: any) {
+    cacheService.delete('accounts');
     const response = await this.api.post('/accounts', account);
     return response.data;
   }
 
+  async updateAccount(id: number, account: any) {
+    cacheService.delete('accounts');
+    const response = await this.api.put(`/accounts/${id}`, account);
+    return response.data;
+  }
+
   async deleteAccount(id: number) {
+    cacheService.delete('accounts');
     const response = await this.api.delete(`/accounts/${id}`);
     return response.data;
   }
 
   async updateAccountBalance(id: number, balance: number) {
+    cacheService.delete('accounts');
     const response = await this.api.put(`/accounts/${id}/balance`, { balance });
     return response.data;
   }
@@ -421,13 +434,36 @@ class ApiService {
 
   // Portfolio History
   async getPortfolioHistory(period: string = '1M') {
-    const response = await this.api.get(`/portfolio/history?period=${period}`);
-    return response.data;
+    const cacheKey = `portfolio-history-${period}`;
+    // Cache for 5 minutes since history doesn't change rapidly
+    return this.cachedGet(`/portfolio/history?period=${period}`, cacheKey, 5 * 60 * 1000);
   }
 
   async getStockHistory(period: string = '1M') {
-    const response = await this.api.get(`/portfolio/stock-history?period=${period}`);
-    return response.data;
+    const cacheKey = `stock-history-${period}`;
+    return this.cachedGet(`/portfolio/stock-history?period=${period}`, cacheKey, 5 * 60 * 1000);
+  }
+
+  // Market Indices API
+  async getMarketIndices() {
+    try {
+      const response = await this.api.get('/portfolio/market-indices');
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Failed to fetch market indices:', error);
+      return { success: false, error };
+    }
+  }
+
+  // Stock Chart Data API
+  async getStockChart(symbol: string, period: string = '1M') {
+    try {
+      const response = await this.api.get(`/portfolio/stock-chart/${symbol}?period=${period}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Failed to fetch stock chart:', error);
+      return { success: false, error };
+    }
   }
 }
 

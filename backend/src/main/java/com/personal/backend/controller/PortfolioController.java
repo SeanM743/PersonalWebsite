@@ -4,6 +4,7 @@ import com.personal.backend.dto.PortfolioResponse;
 import com.personal.backend.dto.PortfolioSummary;
 import com.personal.backend.dto.CompletePortfolioSummary;
 import com.personal.backend.dto.StockRequest;
+import com.personal.backend.dto.AccountResponse;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.service.PortfolioService;
 import com.personal.backend.service.StockHoldingService;
@@ -435,9 +436,9 @@ public class PortfolioController {
             Long userId = getUserIdFromAuthentication(authentication);
             log.info("Getting reconstructed stock portfolio history for user {} period {}", userId, period);
             
-            // Blocking here since controller is synchronous. Ideally, use WebFlux properly.
+            // Use synchronous method directly - avoids reactive overhead and .block()
             List<com.personal.backend.dto.PortfolioHistoryPoint> history = 
-                    historicalPortfolioService.getReconstructedHistory(userId, period).block();
+                    historicalPortfolioService.getReconstructedHistorySync(userId, period);
             
             return ResponseEntity.ok(PortfolioResponse.success(history, "Stock history retrieved successfully"));
             
@@ -494,6 +495,50 @@ public class PortfolioController {
             log.error("Error adding transaction: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(PortfolioResponse.error("Internal server error: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Get market indices data (DOW, NASDAQ, S&P 500, Bitcoin, Gold)
+     * GET /api/portfolio/market-indices
+     */
+    @GetMapping("/market-indices")
+    public ResponseEntity<AccountResponse<List<Map<String, Object>>>> getMarketIndices() {
+        try {
+            log.info("Getting market indices");
+            
+            List<Map<String, Object>> indices = portfolioService.getMarketIndices();
+            
+            return ResponseEntity.ok(AccountResponse.success(indices, "Market indices retrieved"));
+            
+        } catch (Exception e) {
+            log.error("Error getting market indices: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(AccountResponse.error("Failed to get market indices"));
+        }
+    }
+
+    /**
+     * Get stock chart data for a specific symbol
+     * GET /api/portfolio/stock-chart/{symbol}
+     */
+    @GetMapping("/stock-chart/{symbol}")
+    public ResponseEntity<List<Map<String, Object>>> getStockChart(
+            @PathVariable String symbol,
+            @RequestParam(value = "period", defaultValue = "1M") String period,
+            Authentication authentication) {
+        
+        try {
+            Long userId = getUserIdFromAuthentication(authentication);
+            log.info("Getting stock chart for user {} symbol {} period {}", userId, symbol, period);
+            
+            List<Map<String, Object>> chartData = portfolioService.getStockChartData(symbol, period);
+            
+            return ResponseEntity.ok(chartData);
+            
+        } catch (Exception e) {
+            log.error("Error getting stock chart: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of());
         }
     }
 }

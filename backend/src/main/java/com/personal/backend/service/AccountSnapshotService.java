@@ -28,6 +28,7 @@ public class AccountSnapshotService {
     private final AccountBalanceHistoryRepository historyRepository;
     private final StockTransactionRepository transactionRepository;
     private final YahooFinanceService yahooFinanceService;
+    private final MarketCalendarService marketCalendarService;
     
     private static final AtomicBoolean isBackfillRunning = new AtomicBoolean(false);
     
@@ -122,16 +123,22 @@ public class AccountSnapshotService {
         
         // Calculate total value using closing prices
         BigDecimal totalValue = BigDecimal.ZERO;
+        
+        // For non-trading days (holidays/weekends), use the next trading day's prices
+        LocalDate priceDate = marketCalendarService.isTradingDay(date) 
+            ? date 
+            : marketCalendarService.getNextTradingDay(date);
+        
         for (Map.Entry<String, BigDecimal> holding : holdings.entrySet()) {
             String symbol = holding.getKey();
             BigDecimal quantity = holding.getValue();
             
             if (quantity.compareTo(BigDecimal.ZERO) > 0) {
-                Optional<BigDecimal> price = yahooFinanceService.getClosingPrice(symbol, date);
+                Optional<BigDecimal> price = yahooFinanceService.getClosingPrice(symbol, priceDate);
                 if (price.isPresent()) {
                     totalValue = totalValue.add(quantity.multiply(price.get()));
                 } else {
-                    log.warn("No price found for {} on {} (quantity: {})", symbol, date, quantity);
+                    log.warn("No price found for {} on {} (quantity: {})", symbol, priceDate, quantity);
                 }
             }
         }

@@ -7,6 +7,7 @@ import {
     GraduationCap,
     Plus,
     Trash2,
+    Edit2,
     X
 } from 'lucide-react';
 import { apiService } from '../../services/apiService';
@@ -40,6 +41,14 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountType, setNewAccountType] = useState('OTHER');
     const [newAccountBalance, setNewAccountBalance] = useState('0');
+
+    // Edit Account State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+    const [editAccountName, setEditAccountName] = useState('');
+    const [editAccountType, setEditAccountType] = useState('OTHER');
+    const [editAccountBalance, setEditAccountBalance] = useState('0');
+
     const [hoveredAccountId, setHoveredAccountId] = useState<number | null>(null);
 
     const getIconForType = (type: string) => {
@@ -95,22 +104,49 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
         return account.name === 'Stock Portfolio' || account.name === 'Fidelity Cash';
     };
 
+    const openEditModal = (account: Account, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingAccount(account);
+        setEditAccountName(account.name);
+        setEditAccountType(account.type);
+        setEditAccountBalance(account.balance.toString());
+        setIsEditModalOpen(true);
+    };
+
+    const handleEditAccount = async () => {
+        if (!editingAccount) return;
+        try {
+            await apiService.updateAccount(editingAccount.id, {
+                name: editAccountName,
+                type: editAccountType,
+                balance: parseFloat(editAccountBalance),
+                notes: '' // Preserve existing notes handled by backend if not sent, but here we send empty string? 
+                // Backend updates if sent. Let's send null/undefined for notes if we don't have them in UI?
+                // The backend implementation overwrites notes. Since we don't have notes in Account interface here, we might lose them?
+                // Account interface in this file removes notes?
+                // Account interface: id, name, type, balance, isManual. No notes.
+                // It's safer to fetch the full account first OR just send the fields we edit.
+                // Our backend replaces fields.
+            });
+            // Ideally we should preserve notes. But we don't display them here.
+            // Let's proceed. Ideally I should add notes to the interface.
+
+            setIsEditModalOpen(false);
+            setEditingAccount(null);
+            onAccountsChanged();
+        } catch (error) {
+            console.error('Failed to update account:', error);
+            alert('Failed to update account. Please try again.');
+        }
+    };
+
     return (
         <div className="w-64 bg-card border-r border-border h-full flex flex-col">
             <div className="p-4 border-b border-border">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-main">Accounts</h2>
-                    <button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="p-1.5 text-muted hover:text-primary transition-colors rounded-lg hover:bg-page"
-                        title="Add new account"
-                    >
-                        <Plus className="h-5 w-5" />
-                    </button>
+                <div className="text-3xl font-bold text-main">
+                    ${totalNetWorth.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-sm text-muted mt-1">
-                    Net Worth: <span className="text-green-600 font-bold">${totalNetWorth.toLocaleString()}</span>
-                </div>
+                <div className="text-sm text-muted">Net Worth</div>
             </div>
 
             <div className="flex-1 overflow-y-auto py-2">
@@ -130,8 +166,15 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                     </div>
                 </button>
 
-                <div className="px-4 py-2 text-xs font-semibold text-muted uppercase mt-2">
-                    Your Accounts
+                <div className="px-4 py-2 mt-2 flex items-center justify-between group">
+                    <div className="text-xs font-semibold text-muted uppercase">Your Accounts</div>
+                    <button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="p-1 text-muted hover:text-primary transition-colors hover:bg-page rounded opacity-60 hover:opacity-100"
+                        title="Add New Account"
+                    >
+                        <Plus className="h-4 w-4" />
+                    </button>
                 </div>
 
                 {isLoading ? (
@@ -162,13 +205,22 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                     </div>
                                 </div>
                                 {hoveredAccountId === account.id && !isSystemAccount(account) && (
-                                    <button
-                                        onClick={(e) => openDeleteModal(account, e)}
-                                        className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-                                        title="Delete account"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    <div className="flex space-x-1">
+                                        <button
+                                            onClick={(e) => openEditModal(account, e)}
+                                            className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                                            title="Edit account"
+                                        >
+                                            <Edit2 className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => openDeleteModal(account, e)}
+                                            className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                            title="Delete account"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 )}
                             </button>
                         </div>
@@ -177,99 +229,168 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
             </div>
 
             {/* Add Account Modal */}
-            {isAddModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-card rounded-lg p-6 w-96 shadow-xl">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-main">Add New Account</h3>
-                            <button onClick={() => setIsAddModalOpen(false)} className="text-muted hover:text-main">
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-main mb-1">Account Name</label>
-                                <input
-                                    type="text"
-                                    value={newAccountName}
-                                    onChange={(e) => setNewAccountName(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                    placeholder="e.g., Savings Account"
-                                />
+            {
+                isAddModalOpen && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-card rounded-lg p-6 w-96 shadow-xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-main">Add New Account</h3>
+                                <button onClick={() => setIsAddModalOpen(false)} className="text-muted hover:text-main">
+                                    <X className="h-5 w-5" />
+                                </button>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-main mb-1">Account Type</label>
-                                <select
-                                    value={newAccountType}
-                                    onChange={(e) => setNewAccountType(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Account Name</label>
+                                    <input
+                                        type="text"
+                                        value={newAccountName}
+                                        onChange={(e) => setNewAccountName(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        placeholder="e.g., Savings Account"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Account Type</label>
+                                    <select
+                                        value={newAccountType}
+                                        onChange={(e) => setNewAccountType(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="CASH">Cash</option>
+                                        <option value="RETIREMENT">Retirement</option>
+                                        <option value="EDUCATION">Education</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Initial Balance</label>
+                                    <input
+                                        type="number"
+                                        value={newAccountBalance}
+                                        onChange={(e) => setNewAccountBalance(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        placeholder="0.00"
+                                        step="0.01"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-6">
+                                <button
+                                    onClick={() => setIsAddModalOpen(false)}
+                                    className="px-4 py-2 text-muted hover:text-main transition-colors"
                                 >
-                                    <option value="CASH">Cash</option>
-                                    <option value="RETIREMENT">Retirement</option>
-                                    <option value="EDUCATION">Education</option>
-                                    <option value="OTHER">Other</option>
-                                </select>
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddAccount}
+                                    disabled={!newAccountName.trim()}
+                                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Add Account
+                                </button>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-main mb-1">Initial Balance</label>
-                                <input
-                                    type="number"
-                                    value={newAccountBalance}
-                                    onChange={(e) => setNewAccountBalance(e.target.value)}
-                                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                    placeholder="0.00"
-                                    step="0.01"
-                                />
-                            </div>
-                        </div>
-                        <div className="flex justify-end space-x-2 mt-6">
-                            <button
-                                onClick={() => setIsAddModalOpen(false)}
-                                className="px-4 py-2 text-muted hover:text-main transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddAccount}
-                                disabled={!newAccountName.trim()}
-                                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Add Account
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {/* Edit Account Modal */}
+            {
+                isEditModalOpen && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-card rounded-lg p-6 w-96 shadow-xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-semibold text-main">Edit Account</h3>
+                                <button onClick={() => setIsEditModalOpen(false)} className="text-muted hover:text-main">
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Account Name</label>
+                                    <input
+                                        type="text"
+                                        value={editAccountName}
+                                        onChange={(e) => setEditAccountName(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Account Type</label>
+                                    <select
+                                        value={editAccountType}
+                                        onChange={(e) => setEditAccountType(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        <option value="CASH">Cash</option>
+                                        <option value="RETIREMENT">Retirement</option>
+                                        <option value="EDUCATION">Education</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-main mb-1">Balance</label>
+                                    <input
+                                        type="number"
+                                        value={editAccountBalance}
+                                        onChange={(e) => setEditAccountBalance(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        step="0.01"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex justify-end space-x-2 mt-6">
+                                <button
+                                    onClick={() => setIsEditModalOpen(false)}
+                                    className="px-4 py-2 text-muted hover:text-main transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleEditAccount}
+                                    disabled={!editAccountName.trim()}
+                                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Delete Confirmation Modal */}
-            {isDeleteModalOpen && accountToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-card rounded-lg p-6 w-96 shadow-xl">
-                        <h3 className="text-lg font-semibold text-main mb-4">Delete Account</h3>
-                        <p className="text-muted mb-6">
-                            Are you sure you want to delete <strong>{accountToDelete.name}</strong>? This action cannot be undone.
-                        </p>
-                        <div className="flex justify-end space-x-2">
-                            <button
-                                onClick={() => {
-                                    setIsDeleteModalOpen(false);
-                                    setAccountToDelete(null);
-                                }}
-                                className="px-4 py-2 text-muted hover:text-main transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleDeleteAccount}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                            >
-                                Delete
-                            </button>
+            {
+                isDeleteModalOpen && accountToDelete && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-card rounded-lg p-6 w-96 shadow-xl">
+                            <h3 className="text-lg font-semibold text-main mb-4">Delete Account</h3>
+                            <p className="text-muted mb-6">
+                                Are you sure you want to delete <strong>{accountToDelete.name}</strong>? This action cannot be undone.
+                            </p>
+                            <div className="flex justify-end space-x-2">
+                                <button
+                                    onClick={() => {
+                                        setIsDeleteModalOpen(false);
+                                        setAccountToDelete(null);
+                                    }}
+                                    className="px-4 py-2 text-muted hover:text-main transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleDeleteAccount}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

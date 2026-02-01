@@ -3,6 +3,7 @@ package com.personal.backend.service;
 import com.personal.backend.dto.PortfolioResponse;
 import com.personal.backend.dto.StockRequest;
 import com.personal.backend.util.ValidationResult;
+import com.personal.backend.model.CurrentStockPrice;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.repository.StockTickerRepository;
 import com.personal.backend.repository.StockTickerRepository;
@@ -17,10 +18,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.personal.backend.dto.MarketData;
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +39,7 @@ public class StockHoldingService {
     private final StockTransactionRepository transactionRepository;
     private final FinancialValidator financialValidator;
     private final YahooFinanceService yahooFinanceService;
+    private final StockPriceCacheService stockPriceCacheService;
     
     @Value("${portfolio.max.positions.per.user:100}")
     private int maxPositionsPerUser;
@@ -223,8 +231,24 @@ public class StockHoldingService {
             
             List<StockTicker> holdings = stockRepository.findByUserIdOrderBySymbolAsc(userId);
 
-            // Update prices if stale
-            holdings.forEach(this::updatePriceIfStale);
+            // Use the price cache service for smart price fetching
+            List<String> symbols = holdings.stream()
+                    .map(StockTicker::getSymbol)
+                    .collect(Collectors.toList());
+            
+            Map<String, CurrentStockPrice> priceCache = stockPriceCacheService.getPricesWithRefresh(symbols);
+            
+            // Apply cached prices to holdings
+            for (StockTicker ticker : holdings) {
+                CurrentStockPrice cached = priceCache.get(ticker.getSymbol());
+                if (cached != null && cached.getPrice() != null) {
+                    ticker.setCurrentPrice(cached.getPrice());
+                    ticker.setDailyChange(cached.getDailyChange());
+                    ticker.setDailyChangePercentage(cached.getDailyChangePercent());
+                    ticker.setLastPriceUpdate(cached.getFetchedAt());
+                    ticker.setIsMarketOpen(cached.getMarketOpenWhenFetched());
+                }
+            }
             
             // Calculate portfolio statistics
             BigDecimal totalInvestment = holdings.stream()
@@ -611,5 +635,45 @@ public class StockHoldingService {
                          ticker.getSymbol(), e.getMessage());
             }
         }
+    }
+
+    /**
+     * Check if a stock's price is stale and needs updating.
+     * Always fetches if no price exists. For existing prices, only refreshes during market hours.
+     */
+    private boolean isPriceStale(StockTicker ticker) {
+        // Always fetch if we have no price at all - need initial data
+        if (ticker.getCurrentPrice() == null || ticker.getLastPriceUpdate() == null) {
+            return true;
+        }
+        
+        // If market is closed and we have a price, don't refresh - prices won't change
+        if (!isMarketOpen()) {
+            return false;
+        }
+        
+        // Market is open - refresh if price is older than 15 minutes
+        return ticker.getLastPriceUpdate().isBefore(LocalDateTime.now().minusMinutes(15));
+    }
+
+    /**
+     * Check if NYSE is currently open (Mon-Fri 9:30 AM - 4:00 PM Eastern).
+     * Note: Does not account for holidays.
+     */
+    private boolean isMarketOpen() {
+        ZonedDateTime nowET = ZonedDateTime.now(ZoneId.of("America/New_York"));
+        DayOfWeek day = nowET.getDayOfWeek();
+        LocalTime time = nowET.toLocalTime();
+        
+        // Market closed on weekends
+        if (day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY) {
+            return false;
+        }
+        
+        // Market hours: 9:30 AM - 4:00 PM ET
+        LocalTime marketOpen = LocalTime.of(9, 30);
+        LocalTime marketClose = LocalTime.of(16, 0);
+        
+        return !time.isBefore(marketOpen) && time.isBefore(marketClose);
     }
 }

@@ -53,6 +53,13 @@ public interface StockTickerRepository extends JpaRepository<StockTicker, Long> 
     BigDecimal getTotalInvestmentByUserId(@Param("userId") Long userId);
     
     /**
+     * Get total current portfolio value for a user (using current market prices)
+     * This is an optimized single-query approach to avoid N+1 queries
+     */
+    @Query("SELECT COALESCE(SUM(s.currentPrice * s.quantity), 0) FROM StockTicker s WHERE s.userId = :userId AND s.currentPrice IS NOT NULL")
+    BigDecimal getTotalCurrentValueByUserId(@Param("userId") Long userId);
+    
+    /**
      * Find stocks by symbol pattern (for search functionality)
      */
     List<StockTicker> findByUserIdAndSymbolContainingIgnoreCaseOrderBySymbolAsc(Long userId, String symbolPattern);

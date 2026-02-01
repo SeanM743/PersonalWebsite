@@ -32,6 +32,10 @@ public class CompletePortfolioSummary {
     private BigDecimal totalRetirementValue;
     private BigDecimal totalOtherInvestments;
     
+    // YTD Performance
+    private BigDecimal totalGainLossYTD;
+    private BigDecimal totalGainLossPercentageYTD;
+    
     // Portfolio Allocation
     private Map<String, BigDecimal> allocationByType;
     private Map<String, BigDecimal> allocationByAssetClass;

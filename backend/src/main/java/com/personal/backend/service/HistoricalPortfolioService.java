@@ -29,56 +29,62 @@ public class HistoricalPortfolioService {
      * Reads from pre-computed snapshots in account_balance_history table.
      */
     public Mono<List<PortfolioHistoryPoint>> getReconstructedHistory(Long userId, String period) {
-        return Mono.fromCallable(() -> {
-            log.info("Getting portfolio history for user {} with period {}", userId, period);
+        return Mono.fromCallable(() -> getReconstructedHistorySync(userId, period));
+    }
+    
+    /**
+     * Synchronous version of getReconstructedHistory - avoids reactive overhead.
+     * Call this directly when you don't need reactive semantics.
+     */
+    public List<PortfolioHistoryPoint> getReconstructedHistorySync(Long userId, String period) {
+        log.info("Getting portfolio history for user {} with period {}", userId, period);
+        
+        // 1. Determine date range
+        LocalDate endDate = LocalDate.now();
+        LocalDate startDate = calculateStartDate(period, endDate);
+        
+        // Ensure we don't go before Jan 1, 2026
+        LocalDate earliestDate = LocalDate.of(2026, 1, 1);
+        if (startDate.isBefore(earliestDate)) {
+            startDate = earliestDate;
+        }
+        
+        // 2. Get stock portfolio account
+        List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
+        if (accounts.isEmpty()) {
+            log.warn("No stock account found");
+            return Collections.emptyList();
+        }
+        Account stockAccount = accounts.get(0); // Assuming single stock portfolio
+        
+        // 3. Check if we need to fill missing snapshots
+        List<AccountBalanceHistory> existingSnapshots = historyRepository
+            .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccount.getId(), startDate, endDate);
+        
+        // Calculate expected number of days
+        long expectedDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        
+        if (existingSnapshots.size() < expectedDays) {
+            log.info("Missing snapshots detected. Expected {}, found {}. Filling gaps...", 
+                expectedDays, existingSnapshots.size());
             
-            // 1. Determine date range
-            LocalDate endDate = LocalDate.now();
-            LocalDate startDate = calculateStartDate(period, endDate);
+            // Fill missing snapshots for this account
+            accountSnapshotService.fillMissingSnapshots();
             
-            // Ensure we don't go before Jan 1, 2026
-            LocalDate earliestDate = LocalDate.of(2026, 1, 1);
-            if (startDate.isBefore(earliestDate)) {
-                startDate = earliestDate;
-            }
-            
-            // 2. Get stock portfolio account
-            List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
-            if (accounts.isEmpty()) {
-                log.warn("No stock account found");
-                return Collections.emptyList();
-            }
-            Account stockAccount = accounts.get(0); // Assuming single stock portfolio
-            
-            // 3. Check if we need to fill missing snapshots
-            List<AccountBalanceHistory> existingSnapshots = historyRepository
+            // Re-query to get complete data
+            existingSnapshots = historyRepository
                 .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccount.getId(), startDate, endDate);
-            
-            // Calculate expected number of days
-            long expectedDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
-            
-            if (existingSnapshots.size() < expectedDays) {
-                log.info("Missing snapshots detected. Expected {}, found {}. Filling gaps...", 
-                    expectedDays, existingSnapshots.size());
-                
-                // Fill missing snapshots for this account
-                accountSnapshotService.fillMissingSnapshots();
-                
-                // Re-query to get complete data
-                existingSnapshots = historyRepository
-                    .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccount.getId(), startDate, endDate);
-            }
-            
-            // 4. Convert to PortfolioHistoryPoint
-            List<PortfolioHistoryPoint> history = existingSnapshots.stream()
-                .map(h -> new PortfolioHistoryPoint(h.getDate(), h.getBalance()))
-                .collect(Collectors.toList());
-            
-            log.info("Returning {} portfolio history points from {} to {}", 
-                history.size(), startDate, endDate);
-            
-            return history;
-        });
+        }
+        
+        // 4. Convert to PortfolioHistoryPoint
+        List<PortfolioHistoryPoint> history = existingSnapshots.stream()
+            .map(h -> new PortfolioHistoryPoint(h.getDate(), h.getBalance()))
+            .collect(Collectors.toList());
+        
+        log.info("Returning {} portfolio history points from {} to {}", 
+            history.size(), startDate, endDate);
+        
+        return history;
     }
     
     /**
@@ -87,8 +93,10 @@ public class HistoricalPortfolioService {
     private LocalDate calculateStartDate(String period, LocalDate endDate) {
         return switch (period.toUpperCase()) {
             case "1D" -> endDate.minusDays(1);
+            case "3D" -> endDate.minusDays(3);
             case "5D" -> endDate.minusDays(5);
             case "1M" -> endDate.minusMonths(1);
+            case "3M" -> endDate.minusMonths(3);
             case "6M" -> endDate.minusMonths(6);
             case "YTD" -> LocalDate.of(endDate.getYear(), 1, 1);
             case "1Y" -> endDate.minusYears(1);

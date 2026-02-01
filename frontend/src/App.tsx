@@ -2,7 +2,9 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import ErrorBoundary from './components/Utilities/ErrorBoundary';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PortfolioProvider } from './contexts/PortfolioContext';
 import Header from './components/Layout/Header';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -56,7 +58,11 @@ const App: React.FC = () => {
       <AuthProvider>
         <ThemeProvider>
           <NotificationProvider>
-            <AppContent />
+            <PortfolioProvider>
+              <ErrorBoundary>
+                <AppContent />
+              </ErrorBoundary>
+            </PortfolioProvider>
           </NotificationProvider>
         </ThemeProvider>
       </AuthProvider>

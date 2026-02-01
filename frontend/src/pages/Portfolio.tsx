@@ -1,23 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiService } from '../services/apiService';
 import AccountSidebar from '../components/Portfolio/AccountSidebar';
 import AccountDetails from '../components/Portfolio/AccountDetails';
 import PortfolioOverview from '../components/Portfolio/PortfolioOverview';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 
+// Cache for prefetched stock data
+interface PrefetchedData {
+  transactions: any[];
+  holdings: any[];
+}
+
 const Portfolio: React.FC = () => {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch accounts on mount
+  // Prefetched stock data cache - available immediately when user clicks stock account
+  const prefetchedDataRef = useRef<PrefetchedData | null>(null);
+
+  // Fetch accounts and prefetch stock data in parallel
   const fetchAccounts = async () => {
     setIsLoading(true);
     try {
-      const res = await apiService.getAccounts();
-      if (res.success) {
-        setAccounts(res.data);
+      // Fetch accounts AND stock data in parallel for faster loading
+      const [accountsRes, txnsRes, holdingsRes] = await Promise.all([
+        apiService.getAccounts(),
+        apiService.getTransactions(),
+        apiService.getHoldings()
+      ]);
+
+      if (accountsRes.success) {
+        setAccounts(accountsRes.data);
       }
+
+      // Cache prefetched data for immediate use when stock account is selected
+      prefetchedDataRef.current = {
+        transactions: (txnsRes as any)?.success ? (txnsRes as any).data : [],
+        holdings: (holdingsRes as any)?.success ? (holdingsRes as any).data : []
+      };
+
     } catch (e) {
       console.error("Failed to fetch accounts", e);
     } finally {

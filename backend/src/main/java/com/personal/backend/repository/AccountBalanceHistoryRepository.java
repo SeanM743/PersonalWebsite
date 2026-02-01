@@ -19,4 +19,7 @@ public interface AccountBalanceHistoryRepository extends JpaRepository<AccountBa
     
     // Find history for all accounts in a range (could be large, handle with care or service logic)
     List<AccountBalanceHistory> findByDateBetweenOrderByDateAsc(LocalDate startDate, LocalDate endDate);
+    
+    // Find history for all accounts on a specific date
+    List<AccountBalanceHistory> findByDate(LocalDate date);
 }

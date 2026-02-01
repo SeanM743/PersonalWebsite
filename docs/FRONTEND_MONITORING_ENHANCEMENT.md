@@ -196,20 +196,20 @@ Frontend monitoring provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    Frontend Layer (ENHANCED)                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│  │   React UI   │  │  WebSocket   │  │   Charts &   │          │
-│  │  Components  │  │    Client    │  │ Dashboards   │          │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
-│         │                  │                  │                   │
-│         └──────────────────┼──────────────────┘                  │
-│                            │                                      │
+│                    Frontend Layer (ENHANCED)                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │   React UI   │  │  WebSocket   │  │   Charts &   │           │
+│  │  Components  │  │    Client    │  │ Dashboards   │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         │                  │                  │                 │
+│         └──────────────────┼──────────────────┘                 │
+│                            │                                    │
 │  ┌─────────────────────────▼──────────────────────────┐         │
-│  │         Frontend Metrics Collector (NEW)            │         │
-│  │  - Performance Observer API                         │         │
-│  │  - Error Boundary Tracking                          │         │
-│  │  - User Interaction Tracking                        │         │
-│  │  - Network Performance Monitoring                   │         │
+│  │         Frontend Metrics Collector (NEW)            │        │
+│  │  - Performance Observer API                         │        │
+│  │  - Error Boundary Tracking                          │        │
+│  │  - User Interaction Tracking                        │        │
+│  │  - Network Performance Monitoring                   │        │
 │  └─────────────────────────┬──────────────────────────┘         │
 └────────────────────────────┼─────────────────────────────────────┘
                              │

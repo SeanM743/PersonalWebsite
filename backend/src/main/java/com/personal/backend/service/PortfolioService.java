@@ -11,6 +11,8 @@ import com.personal.backend.model.AccountBalanceHistory;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.repository.AccountBalanceHistoryRepository;
 import com.personal.backend.repository.AccountRepository;
+import com.personal.backend.service.StockPriceCacheService;
+import com.personal.backend.model.CurrentStockPrice;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +29,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +49,7 @@ public class PortfolioService {
     private final AccountRepository accountRepository;
     private final AccountBalanceHistoryRepository accountBalanceHistoryRepository;
     private final HistoricalPortfolioService historicalPortfolioService;
+    private final StockPriceCacheService stockPriceCacheService;
     
     @Value("${portfolio.performance.cache.ttl.minutes:5}")
     private int performanceCacheTtlMinutes;
@@ -86,6 +90,42 @@ public class PortfolioService {
             PerformanceCalculator.PerformanceMetrics metrics = performanceCalculator.calculatePerformanceMetrics(holdings, marketDataMap);
             List<StockPerformance> stockPerformances = performanceCalculator.calculateBatchPerformance(holdings, marketDataMap);
             
+            // Calculate Stock Portfolio YTD Performance
+            BigDecimal stockYtdGain = null;
+            BigDecimal stockYtdGainPct = null;
+            
+            try {
+                List<Account> stockAccounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
+                if (!stockAccounts.isEmpty()) {
+                    Long stockAccountId = stockAccounts.get(0).getId();
+                    LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
+                    LocalDate today = LocalDate.now();
+                    
+                    List<AccountBalanceHistory> history = accountBalanceHistoryRepository
+                            .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccountId, startOfYear, today);
+                    
+                    AccountBalanceHistory baseline = history.stream()
+                            .filter(h -> h.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                            .findFirst()
+                            .orElse(null);
+                    
+                    if (baseline != null) {
+                        BigDecimal startVal = baseline.getBalance();
+                        stockYtdGain = metrics.currentValue().subtract(startVal);
+                        if (startVal.compareTo(BigDecimal.ZERO) > 0) {
+                             stockYtdGainPct = stockYtdGain.divide(startVal, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+                        }
+                    } else {
+                        // If no history this year, maybe assume start value 0? Or N/A.
+                        // For "All Time" logic, cost basis is used. For YTD, if no history, start value is unknown (or 0).
+                        // If account is new this year, start value is 0.
+                        // We'll leave as null or 0.
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to calculate Stock YTD: {}", e.getMessage());
+            }
+
             // Build portfolio summary
             PortfolioSummary summary = PortfolioSummary.builder()
                     .userId(userId)
@@ -95,6 +135,8 @@ public class PortfolioService {
                     .totalGainLossPercentage(metrics.totalGainLossPercentage())
                     .dailyChange(metrics.dailyChange())
                     .dailyChangePercentage(metrics.dailyChangePercentage())
+                    .totalGainLossYTD(stockYtdGain)
+                    .totalGainLossPercentageYTD(stockYtdGainPct)
                     .totalPositions(metrics.totalPositions())
                     .positionsWithCurrentData(metrics.positionsWithData())
                     .stockPerformances(stockPerformances)
@@ -225,6 +267,41 @@ public class PortfolioService {
             
             BigDecimal totalPortfolioValue = stockLiveValue.add(totalStaticValue);
             
+            // Calculate YTD Performance
+            LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
+            LocalDate today = LocalDate.now();
+            
+            // Get all history for this year to find the earliest starting point for each account
+            List<AccountBalanceHistory> yearHistory = accountBalanceHistoryRepository
+                    .findByDateBetweenOrderByDateAsc(startOfYear, today);
+            
+            // Group by account and find the earliest NON-ZERO record for each
+            Map<Long, AccountBalanceHistory> earliestBalances = yearHistory.stream()
+                    .filter(h -> h.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                    .collect(Collectors.toMap(
+                            AccountBalanceHistory::getAccountId,
+                            h -> h,
+                            (existing, replacement) -> existing.getDate().isBefore(replacement.getDate()) ? existing : replacement
+                    ));
+            
+            // Log debugging info
+            log.info("YTD Debug: Found history records: {}", yearHistory.size());
+            earliestBalances.forEach((id, h) -> log.info("YTD Debug: Account {} Earliest: {} Value: {}", id, h.getDate(), h.getBalance()));
+            
+            BigDecimal startOfYearValue = earliestBalances.values().stream()
+                    .map(AccountBalanceHistory::getBalance)
+                    // consistency check: filter out zero balances if appropriate? For now just log.
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            log.info("YTD Debug: StartValue: {}, CurrentValue: {}", startOfYearValue, totalPortfolioValue);
+            
+            BigDecimal ytdGainLoss = totalPortfolioValue.subtract(startOfYearValue);
+            // If start value is 0 (new account), gain is raw amount, but percentage is not well defined (100%?) 
+            // We'll calculate percentage on start value if > 0, else 0.
+            BigDecimal ytdGainPercentage = startOfYearValue.compareTo(BigDecimal.ZERO) > 0
+                    ? ytdGainLoss.divide(startOfYearValue, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
+                    : BigDecimal.ZERO;
+            
             // 6. Assemble complete summary
             CompletePortfolioSummary detailedSummary = CompletePortfolioSummary.builder()
                     .stockPortfolio(stockSummary)
@@ -234,6 +311,8 @@ public class PortfolioService {
                     .totalStockValue(stockLiveValue)
                     .totalRetirementValue(totalRetirement)
                     .totalOtherInvestments(totalEducation.add(totalOther))
+                    .totalGainLossYTD(ytdGainLoss)
+                    .totalGainLossPercentageYTD(ytdGainPercentage)
                     .allocationByType(Map.of(
                             "Stocks", stockLiveValue,
                             "Cash", totalCash,
@@ -325,8 +404,8 @@ public class PortfolioService {
         try {
             log.info("Fetching portfolio history for user {} over period {}", userId, period);
             
-            // Delegate to HistoricalPortfolioService which uses snapshots
-            List<PortfolioHistoryPoint> history = historicalPortfolioService.getReconstructedHistory(userId, period).block();
+            // Use synchronous method directly - avoids reactive overhead and .block()
+            List<PortfolioHistoryPoint> history = historicalPortfolioService.getReconstructedHistorySync(userId, period);
             
             return PortfolioResponse.success(history, "History retrieved successfully");
             
@@ -337,7 +416,8 @@ public class PortfolioService {
     }
 
     /**
-     * Get market data for list of symbols with caching
+     * Get market data for list of symbols using the centralized StockPriceCacheService.
+     * This ensures consistent caching and market-hours logic across the application.
      */
     private Map<String, MarketData> getMarketDataForSymbols(List<String> symbols) {
         if (symbols == null || symbols.isEmpty()) {
@@ -345,51 +425,30 @@ public class PortfolioService {
         }
         
         try {
-            // First, try to get cached data
-            Map<String, MarketData> cachedData = cacheManager.getCachedMarketDataBatch(symbols);
+            // Use the smart caching service (DB-backed, market-aware)
+            // This handles staleness checks and fetching internally
+            Map<String, CurrentStockPrice> prices = stockPriceCacheService.getPricesWithRefresh(symbols);
             
-            // Find symbols that need fresh data
-            List<String> symbolsNeedingUpdate = symbols.stream()
-                    .filter(symbol -> !cachedData.containsKey(symbol) || 
-                            !isMarketDataFresh(cachedData.get(symbol)))
-                    .toList();
-            
-            if (symbolsNeedingUpdate.isEmpty()) {
-                log.debug("All market data found in cache for {} symbols", symbols.size());
-                return cachedData;
-            }
-            
-            log.debug("Fetching fresh market data for {} symbols", symbolsNeedingUpdate.size());
-            
-            // Fetch fresh data for missing symbols
-            Map<String, MarketData> freshData = fetchFreshMarketData(symbolsNeedingUpdate);
-            
-            // Cache the fresh data
-            if (!freshData.isEmpty()) {
-                cacheManager.cacheMarketDataBatch(freshData.values().stream().toList());
-            }
-            
-            // Combine cached and fresh data
-            Map<String, MarketData> combinedData = cachedData.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-            combinedData.putAll(freshData);
-            
-            return combinedData;
+            // Convert to MarketData objects expected by the rest of the system
+            return prices.entrySet().stream()
+                    .map(entry -> {
+                        String symbol = entry.getKey();
+                        CurrentStockPrice price = entry.getValue();
+                        
+                        return MarketData.builder()
+                                .symbol(symbol)
+                                .currentPrice(price.getPrice())
+                                .dailyChange(price.getDailyChange())
+                                .dailyChangePercentage(price.getDailyChangePercent())
+                                .timestamp(price.getFetchedAt())
+                                .cacheTimestamp(price.getFetchedAt())
+                                .isMarketOpen(stockPriceCacheService.isMarketOpen())
+                                .build();
+                    })
+                    .collect(Collectors.toMap(MarketData::getSymbol, Function.identity()));
             
         } catch (Exception e) {
             log.error("Error getting market data for symbols: {}", e.getMessage(), e);
-            return Map.of();
-        }
-    }
-    
-    /**
-     * Fetch fresh market data from API
-     */
-    private Map<String, MarketData> fetchFreshMarketData(List<String> symbols) {
-        try {
-            return yahooFinanceService.getBatchMarketData(symbols);
-        } catch (Exception e) {
-            log.error("Error in fetchFreshMarketData: {}", e.getMessage(), e);
             return Map.of();
         }
     }
@@ -403,15 +462,21 @@ public class PortfolioService {
         }
         
         try {
-            // Invalidate cache for these symbols
-            cacheManager.invalidateSymbols(symbols);
-            
-            // Trigger immediate update
-            marketDataScheduler.updateSymbols(symbols);
+            // Use centralized cache service to force refresh
+            stockPriceCacheService.forceRefresh(symbols);
             
         } catch (Exception e) {
             log.error("Error refreshing market data for symbols: {}", e.getMessage(), e);
         }
+    }
+    
+
+    
+    /**
+     * Check if any market is currently open
+     */
+    private boolean isAnyMarketOpen(Map<String, MarketData> marketDataMap) {
+        return stockPriceCacheService.isMarketOpen();
     }
     
     /**
@@ -422,16 +487,14 @@ public class PortfolioService {
             return false;
         }
         
+        // If market is closed, any cached data is fresh
+        if (!stockPriceCacheService.isMarketOpen()) {
+            return true;
+        }
+        
+        // Market is open - check TTL
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(performanceCacheTtlMinutes);
         return marketData.getCacheTimestamp().isAfter(cutoff);
-    }
-    
-    /**
-     * Check if any market is currently open
-     */
-    private boolean isAnyMarketOpen(Map<String, MarketData> marketDataMap) {
-        return marketDataMap.values().stream()
-                .anyMatch(data -> data.getIsMarketOpen() != null && data.getIsMarketOpen());
     }
     
     /**
@@ -558,6 +621,86 @@ public class PortfolioService {
             }
         } catch (Exception e) {
             log.warn("Failed to sync stock account balance: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Get market indices (DOW, NASDAQ, S&P 500, Bitcoin, Gold)
+     */
+    public List<Map<String, Object>> getMarketIndices() {
+        List<String> indexSymbols = List.of("^DJI", "^IXIC", "^GSPC", "BTC-USD", "GC=F");
+        List<String> indexNames = List.of("DOW", "NASDAQ", "S&P 500", "Bitcoin", "Gold");
+        
+        try {
+            Map<String, CurrentStockPrice> prices = stockPriceCacheService.getPricesWithRefresh(indexSymbols);
+            
+            return java.util.stream.IntStream.range(0, indexSymbols.size())
+                    .mapToObj(i -> {
+                        String symbol = indexSymbols.get(i);
+                        String name = indexNames.get(i);
+                        CurrentStockPrice price = prices.get(symbol);
+                        
+                        Map<String, Object> indexData = new java.util.HashMap<>();
+                        indexData.put("symbol", symbol);
+                        indexData.put("name", name);
+                        
+                        if (price != null) {
+                            indexData.put("price", price.getPrice());
+                            indexData.put("change", price.getDailyChange());
+                            indexData.put("changePercent", price.getDailyChangePercent());
+                        } else {
+                            indexData.put("price", BigDecimal.ZERO);
+                            indexData.put("change", BigDecimal.ZERO);
+                            indexData.put("changePercent", BigDecimal.ZERO);
+                        }
+                        
+                        return indexData;
+                    })
+                    .toList();
+                    
+        } catch (Exception e) {
+            log.error("Error fetching market indices: {}", e.getMessage(), e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Get stock chart data for a specific symbol and time period
+     */
+    public List<Map<String, Object>> getStockChartData(String symbol, String period) {
+        try {
+            // Special handling for 1D: Return intraday data (5-min intervals)
+            if ("1D".equalsIgnoreCase(period)) {
+                return yahooFinanceService.getIntradayChartData(symbol);
+            }
+
+            // Calculate date range based on period for daily data
+            LocalDate endDate = LocalDate.now();
+            LocalDate startDate = switch (period.toUpperCase()) {
+                case "1W" -> endDate.minusWeeks(1);
+                case "1M" -> endDate.minusMonths(1);
+                case "6M" -> endDate.minusMonths(6);
+                case "1Y" -> endDate.minusYears(1);
+                default -> endDate.minusMonths(1);
+            };
+            
+            // Use Yahoo Finance service to get historical data
+            List<com.personal.backend.model.StockDailyPrice> dailyPrices = 
+                    yahooFinanceService.getHistoricalPrices(symbol, startDate, endDate);
+            
+            return dailyPrices.stream()
+                    .sorted(Comparator.comparing(com.personal.backend.model.StockDailyPrice::getDate))
+                    .map(price -> {
+                        Map<String, Object> dataPoint = new java.util.HashMap<>();
+                        dataPoint.put("date", price.getDate().toString());
+                        dataPoint.put("price", price.getClosePrice());
+                        return dataPoint;
+                    })
+                    .toList();
+                    
+        } catch (Exception e) {
+            log.error("Error fetching stock chart data for {}: {}", symbol, e.getMessage(), e);
+            return List.of();
         }
     }
 }

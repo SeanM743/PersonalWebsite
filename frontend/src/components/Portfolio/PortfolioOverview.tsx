@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiService } from '../../services/apiService';
 import { usePortfolio } from '../../contexts/PortfolioContext';
 import LoadingSpinner from '../UI/LoadingSpinner';
+import TimeRangeSelector from './TimeRangeSelector';
+import WatchlistWidget from './WatchlistWidget';
 import {
     TrendingUp,
     TrendingDown,
@@ -14,7 +16,8 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
-    ResponsiveContainer
+    ResponsiveContainer,
+    ReferenceLine
 } from 'recharts';
 
 interface Holding {
@@ -35,13 +38,16 @@ interface CompletePortfolioSummary {
     // ... other fields matching original interface
     allocationByType: Record<string, number>;
     totalStockValue: number;
+    totalGainLossYTD: number;
+    totalGainLossPercentageYTD: number;
 }
 
 const PortfolioOverview: React.FC = () => {
     const [completePortfolio, setCompletePortfolio] = useState<CompletePortfolioSummary | null>(null);
     const [holdings, setHoldings] = useState<Holding[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState('1M');
+    // Track active value for horizontal crosshair line
+    const [activeValue, setActiveValue] = useState<number | null>(null);
 
     // Use Portfolio Context for history data
     const { historyData, isHistoryLoading, loadHistory } = usePortfolio();
@@ -54,16 +60,14 @@ const PortfolioOverview: React.FC = () => {
             ]);
 
             if (completeRes.success) {
-                setCompletePortfolio(completeRes.data);
+                setCompletePortfolio(completeRes.data || {});
             }
 
             if (holdingsRes.success) {
-                setHoldings(holdingsRes.data);
+                setHoldings(holdingsRes.data || []);
             }
         } catch (err: any) {
             console.error('Failed to load portfolio', err);
-        } finally {
-            setIsLoading(false);
         }
     };
 
@@ -90,13 +94,8 @@ const PortfolioOverview: React.FC = () => {
     const topHoldingPercentage = topHolding && completePortfolio && completePortfolio.totalStockValue ?
         ((topHolding.currentValue || topHolding.totalInvestment) / completePortfolio.totalStockValue * 100).toFixed(1) : '0';
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <LoadingSpinner size="large" />
-            </div>
-        );
-    }
+    // Don't block on isLoading - let cards render immediately with whatever data we have
+    // The chart section has its own loading indicator via isHistoryLoading
 
     return (
         <div className="space-y-6 p-6 animate-fadeIn">
@@ -124,22 +123,23 @@ const PortfolioOverview: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Total Gain/Loss */}
+                {/* YTD Gain/Loss */}
                 <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
                     <div className="flex items-start justify-between">
                         <div>
                             <div className="flex items-center text-muted text-sm mb-1">
                                 <TrendingUp className="h-4 w-4 mr-1" />
-                                Total Gain/Loss
+                                YTD Gain/Loss ({new Date().getFullYear()})
                             </div>
-                            <div className="text-2xl font-bold text-main">
-                                ${completePortfolio?.stockPortfolio?.totalGainLoss?.toLocaleString('en-US', {
+                            <div className={`text-2xl font-bold ${completePortfolio?.totalGainLossYTD && completePortfolio.totalGainLossYTD >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {completePortfolio?.totalGainLossYTD && completePortfolio.totalGainLossYTD >= 0 ? '+' : ''}${Math.abs(completePortfolio?.totalGainLossYTD || 0).toLocaleString('en-US', {
                                     minimumFractionDigits: 0,
                                     maximumFractionDigits: 0
-                                }) || '0'}
+                                })}
                             </div>
-                            <div className="text-gray-500 text-sm mt-1">
-                                Stocks only
+                            <div className={`text-sm mt-1 flex items-center ${completePortfolio?.totalGainLossPercentageYTD && completePortfolio.totalGainLossPercentageYTD >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {completePortfolio?.totalGainLossPercentageYTD && completePortfolio.totalGainLossPercentageYTD >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                                {Math.abs(completePortfolio?.totalGainLossPercentageYTD || 0).toFixed(2)}%
                             </div>
                         </div>
                     </div>
@@ -168,23 +168,14 @@ const PortfolioOverview: React.FC = () => {
             <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
                 <div className="flex items-center justify-between mb-6">
                     <h2 className="text-lg font-semibold text-main">Portfolio Performance</h2>
-                    <div className="flex space-x-1 bg-page rounded-lg p-1 border border-border">
-                        {['1M', '3M', '6M', '1Y', 'ALL'].map((period) => (
-                            <button
-                                key={period}
-                                onClick={() => setSelectedPeriod(period)}
-                                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${selectedPeriod === period
-                                    ? 'bg-primary text-white shadow-sm'
-                                    : 'text-muted hover:text-main hover:bg-muted/10'}`}
-                            >
-                                {period}
-                            </button>
-                        ))}
-                    </div>
+                    <TimeRangeSelector
+                        selectedPeriod={selectedPeriod}
+                        onSelectPeriod={setSelectedPeriod}
+                    />
                 </div>
 
                 <div className="h-[300px] w-full">
-                    {isLoading && historyData.length === 0 ? (
+                    {isHistoryLoading && historyData.length === 0 ? (
                         <div className="h-full flex items-center justify-center text-muted">
                             <LoadingSpinner />
                         </div>
@@ -196,8 +187,14 @@ const PortfolioOverview: React.FC = () => {
                     ) : (
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart
-                                data={historyData}
+                                data={historyData.filter(d => d.value > 0)}
                                 margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                                onMouseMove={(e: any) => {
+                                    if (e.activePayload && e.activePayload[0]) {
+                                        setActiveValue(e.activePayload[0].payload.value);
+                                    }
+                                }}
+                                onMouseLeave={() => setActiveValue(null)}
                             >
                                 <defs>
                                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -208,17 +205,19 @@ const PortfolioOverview: React.FC = () => {
                                 <XAxis
                                     dataKey="date"
                                     tickFormatter={(str) => {
-                                        const date = new Date(str);
+                                        // Fix timezone by parsing as local date parts
+                                        const [year, month, day] = str.split('-').map(Number);
+                                        const date = new Date(year, month - 1, day);
                                         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                     }}
                                     stroke="#6b7280"
                                     fontSize={12}
                                 />
                                 <YAxis
-                                    tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact' })}`}
+                                    tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 })}`}
                                     stroke="#6b7280"
                                     fontSize={12}
-                                    domain={['auto', 'auto']}
+                                    domain={['dataMin', 'dataMax']}
                                 />
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.3} />
                                 <Tooltip
@@ -226,7 +225,10 @@ const PortfolioOverview: React.FC = () => {
                                     itemStyle={{ color: '#e5e7eb' }}
                                     labelStyle={{ color: '#9ca3af' }}
                                     formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
-                                    labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { dateStyle: 'medium' })}
+                                    labelFormatter={(label) => {
+                                        const [year, month, day] = label.split('-').map(Number);
+                                        return new Date(year, month - 1, day).toLocaleDateString('en-US', { dateStyle: 'medium' });
+                                    }}
                                 />
                                 <Area
                                     type="monotone"
@@ -236,6 +238,14 @@ const PortfolioOverview: React.FC = () => {
                                     fill="url(#colorValue)"
                                     isAnimationActive={false}
                                 />
+                                {activeValue !== null && (
+                                    <ReferenceLine
+                                        y={activeValue}
+                                        stroke="#9ca3af"
+                                        strokeDasharray="3 3"
+                                        opacity={0.5}
+                                    />
+                                )}
                             </AreaChart>
                         </ResponsiveContainer>
                     )}
@@ -243,7 +253,10 @@ const PortfolioOverview: React.FC = () => {
             </div>
 
             {/* Bottom Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Watchlist */}
+                <WatchlistWidget />
+
                 {/* Asset Allocation */}
                 <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
                     <h3 className="text-lg font-semibold text-main mb-4">Asset Allocation</h3>
