@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +28,8 @@ public class AccountSnapshotService {
     private final AccountBalanceHistoryRepository historyRepository;
     private final StockTransactionRepository transactionRepository;
     private final YahooFinanceService yahooFinanceService;
+    
+    private static final AtomicBoolean isBackfillRunning = new AtomicBoolean(false);
     
     /**
      * Create daily snapshots for all accounts for today
@@ -180,53 +183,62 @@ public class AccountSnapshotService {
     @Async
     @Transactional
     public void fillMissingSnapshots() {
-        LocalDate startDate = LocalDate.of(2026, 1, 1);
-        LocalDate endDate = LocalDate.now();
-        
-        log.info("Checking for missing snapshots from {} to {}", startDate, endDate);
-        
-        // Ensure historical stock prices exist for all traded symbols
-        List<StockTransaction> allTransactions = transactionRepository.findAll();
-        Set<String> symbols = allTransactions.stream()
-            .map(StockTransaction::getSymbol)
-            .collect(Collectors.toSet());
-        
-        if (!symbols.isEmpty()) {
-            log.info("Ensuring historical stock price data exists for {} symbols before filling snapshots", symbols.size());
-            yahooFinanceService.ensureHistoricalDataExists(new ArrayList<>(symbols));
+        if (!isBackfillRunning.compareAndSet(false, true)) {
+            log.info("A background backfill is already running. Skipping this request.");
+            return;
         }
         
-        List<Account> accounts = accountRepository.findAll();
-        int totalFilled = 0;
-        
-        for (Account account : accounts) {
-            List<LocalDate> missingDates = findMissingDates(account.getId(), startDate, endDate);
+        try {
+            LocalDate startDate = LocalDate.of(2026, 1, 1);
+            LocalDate endDate = LocalDate.now();
             
-            if (!missingDates.isEmpty()) {
-                log.info("Found {} missing dates for account {} ({})", 
-                    missingDates.size(), account.getId(), account.getName());
+            log.info("Checking for missing snapshots from {} to {}", startDate, endDate);
+            
+            // Ensure historical stock prices exist for all traded symbols
+            List<StockTransaction> allTransactions = transactionRepository.findAll();
+            Set<String> symbols = allTransactions.stream()
+                .map(StockTransaction::getSymbol)
+                .collect(Collectors.toSet());
+            
+            if (!symbols.isEmpty()) {
+                log.info("Ensuring historical stock price data exists for {} symbols before filling snapshots", symbols.size());
+                yahooFinanceService.ensureHistoricalDataExists(new ArrayList<>(symbols));
+            }
+            
+            List<Account> accounts = accountRepository.findAll();
+            int totalFilled = 0;
+            
+            for (Account account : accounts) {
+                List<LocalDate> missingDates = findMissingDates(account.getId(), startDate, endDate);
                 
-                for (LocalDate date : missingDates) {
-                    try {
-                        BigDecimal balance = calculateAccountBalance(account, date);
-                        
-                        AccountBalanceHistory snapshot = AccountBalanceHistory.builder()
-                            .accountId(account.getId())
-                            .date(date)
-                            .balance(balance)
-                            .build();
-                        
-                        historyRepository.save(snapshot);
-                        totalFilled++;
-                    } catch (Exception e) {
-                        log.error("Failed to fill snapshot for account {} on {}: {}", 
-                            account.getId(), date, e.getMessage());
+                if (!missingDates.isEmpty()) {
+                    log.info("Found {} missing dates for account {} ({})", 
+                        missingDates.size(), account.getId(), account.getName());
+                    
+                    for (LocalDate date : missingDates) {
+                        try {
+                            BigDecimal balance = calculateAccountBalance(account, date);
+                            
+                            AccountBalanceHistory snapshot = AccountBalanceHistory.builder()
+                                .accountId(account.getId())
+                                .date(date)
+                                .balance(balance)
+                                .build();
+                            
+                            historyRepository.save(snapshot);
+                            totalFilled++;
+                        } catch (Exception e) {
+                            log.error("Failed to fill snapshot for account {} on {}: {}", 
+                                account.getId(), date, e.getMessage());
+                        }
                     }
                 }
             }
+            
+            log.info("Filled {} missing snapshots", totalFilled);
+        } finally {
+            isBackfillRunning.set(false);
         }
-        
-        log.info("Filled {} missing snapshots", totalFilled);
     }
     
     /**

@@ -23,7 +23,12 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class YahooFinanceService {
-    
+
+    static {
+        // Set a custom User-Agent to avoid aggressive rate limiting from Yahoo Finance
+        System.setProperty("http.agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+    }
+
     private final StockDailyPriceRepository dailyPriceRepository;
     
     /**
