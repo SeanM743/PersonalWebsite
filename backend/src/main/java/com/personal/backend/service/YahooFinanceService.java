@@ -1,18 +1,15 @@
 package com.personal.backend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.personal.backend.dto.MarketData;
 import com.personal.backend.model.StockDailyPrice;
 import com.personal.backend.repository.StockDailyPriceRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import yahoofinance.Stock;
-import yahoofinance.YahooFinance;
-import yahoofinance.histquotes.HistoricalQuote;
-import yahoofinance.histquotes.Interval;
-import yahoofinance.quotes.stock.StockQuote;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -21,15 +18,19 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class YahooFinanceService {
 
-    static {
-        // Set a custom User-Agent to avoid aggressive rate limiting from Yahoo Finance
-        System.setProperty("http.agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-    }
-
     private final StockDailyPriceRepository dailyPriceRepository;
+    private final WebClient webClient;
+    
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
+
+    public YahooFinanceService(StockDailyPriceRepository dailyPriceRepository, WebClient.Builder webClientBuilder) {
+        this.dailyPriceRepository = dailyPriceRepository;
+        this.webClient = webClientBuilder
+            .defaultHeader("User-Agent", USER_AGENT)
+            .build();
+    }
     
     /**
      * Fetch and persist historical prices for a symbol from startDate to endDate
@@ -44,35 +45,41 @@ public class YahooFinanceService {
             // Add a delay to avoid rate limiting
             Thread.sleep(2000);
             
-            Calendar from = Calendar.getInstance();
-            from.setTime(Date.from(startDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+            long p1 = startDate.atStartOfDay(ZoneId.of("UTC")).toEpochSecond();
+            long p2 = endDate.atStartOfDay(ZoneId.of("UTC")).plusDays(1).toEpochSecond();
             
-            Calendar to = Calendar.getInstance();
-            to.setTime(Date.from(endDate.atStartOfDay(ZoneId.systemDefault()).toInstant()));
+            String url = String.format("https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d", 
+                symbol, p1, p2);
             
-            Stock stock = YahooFinance.get(symbol, from, to, Interval.DAILY);
+            log.info("Requesting Yahoo v8 API: {}", url);
             
-            if (stock == null) {
-                log.warn("Stock not found for symbol: {}", symbol);
+            JsonNode root = webClient.get()
+                .uri(url)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
+            
+            if (root == null || !root.has("chart") || root.get("chart").get("result").isNull()) {
+                log.warn("No result found for symbol: {}", symbol);
                 return;
             }
             
-            List<HistoricalQuote> history = stock.getHistory();
+            JsonNode result = root.get("chart").get("result").get(0);
+            JsonNode timestamps = result.get("timestamp");
+            JsonNode indicators = result.get("indicators").get("quote").get(0).get("close");
             
-            if (history == null || history.isEmpty()) {
-                log.warn("No historical data found for {}", symbol);
+            if (timestamps == null || indicators == null || timestamps.size() == 0) {
+                log.warn("No historical data points found for {}", symbol);
                 return;
             }
             
             int persistedCount = 0;
-            for (HistoricalQuote quote : history) {
-                if (quote.getDate() == null || quote.getClose() == null) {
-                    continue;
-                }
+            for (int i = 0; i < timestamps.size(); i++) {
+                if (indicators.get(i).isNull()) continue;
                 
-                LocalDate date = quote.getDate().toInstant()
-                    .atZone(ZoneId.systemDefault()).toLocalDate();
-                BigDecimal closePrice = quote.getClose();
+                long timestamp = timestamps.get(i).asLong();
+                LocalDate date = Instant.ofEpochSecond(timestamp).atZone(ZoneId.systemDefault()).toLocalDate();
+                BigDecimal closePrice = BigDecimal.valueOf(indicators.get(i).asDouble());
                 
                 // Check if already exists
                 if (dailyPriceRepository.findBySymbolAndDate(symbol, date).isEmpty()) {
@@ -172,18 +179,42 @@ public class YahooFinanceService {
             // Add a small delay to avoid rate limiting
             Thread.sleep(500); 
             
-            Stock stock = YahooFinance.get(symbol);
-            if (stock == null || stock.getQuote() == null) {
+            String url = String.format("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=1d", symbol);
+            
+            JsonNode root = webClient.get()
+                .uri(url)
+                .retrieve()
+                .bodyToMono(JsonNode.class)
+                .block();
+            
+            if (root == null || !root.has("chart") || root.get("chart").get("result").isNull()) {
                 return Optional.empty();
             }
-            return Optional.of(mapToMarketData(stock));
+            
+            JsonNode result = root.get("chart").get("result").get(0);
+            JsonNode meta = result.get("meta");
+            
+            return Optional.of(MarketData.builder()
+                .symbol(symbol)
+                .currentPrice(BigDecimal.valueOf(meta.get("regularMarketPrice").asDouble()))
+                .previousClose(BigDecimal.valueOf(meta.get("chartPreviousClose").asDouble()))
+                .high(BigDecimal.valueOf(meta.get("regularMarketDayHigh").asDouble()))
+                .low(BigDecimal.valueOf(meta.get("regularMarketDayLow").asDouble()))
+                .currency(meta.get("currency").asText())
+                .exchange(meta.get("exchangeName").asText())
+                .dataSource("Yahoo Finance v8 API")
+                .timestamp(LocalDateTime.now())
+                .lastUpdated(LocalDateTime.now())
+                .hasError(false)
+                .build());
+                
         } catch (Exception e) {
-            if (e.getMessage().contains("429") && retries > 0) {
-                log.warn("Rate limited (429) for {}, retrying in 2 seconds... ({} retries left)", symbol, retries - 1);
-                try { Thread.sleep(2000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            if (e.getMessage() != null && e.getMessage().contains("429") && retries > 0) {
+                log.warn("Rate limited (429) for {}, retrying in 5 seconds... ({} retries left)", symbol, retries - 1);
+                try { Thread.sleep(5000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                 return getMarketDataWithRetry(symbol, retries - 1);
             }
-            log.error("Error fetching market data for {}: {}", symbol, e.getMessage());
+            log.error("Error fetching market data for {}: {}", symbol, e.getLocalizedMessage());
             return Optional.empty();
         }
     }
@@ -195,39 +226,13 @@ public class YahooFinanceService {
         if (symbols == null || symbols.isEmpty()) {
             return Collections.emptyMap();
         }
-        try {
-            Map<String, Stock> stocks = YahooFinance.get(symbols.toArray(new String[0]));
-            return stocks.entrySet().stream()
-                .filter(e -> e.getValue() != null && e.getValue().getQuote() != null)
-                .collect(Collectors.toMap(
-                    Map.Entry::getKey,
-                    e -> mapToMarketData(e.getValue())
-                ));
-        } catch (Exception e) {
-            log.error("Error fetching batch market data: {}", e.getMessage());
-            return Collections.emptyMap();
+        
+        // Yahoo v8 chart API doesn't support batching as easily as v7 quote, 
+        // so we'll fetch them individually for now, but we'll use parallel fetching in the future if needed.
+        Map<String, MarketData> results = new HashMap<>();
+        for (String symbol : symbols) {
+            getMarketData(symbol).ifPresent(data -> results.put(symbol, data));
         }
-    }
-
-    private MarketData mapToMarketData(Stock stock) {
-        StockQuote quote = stock.getQuote();
-        return MarketData.builder()
-            .symbol(stock.getSymbol())
-            .currentPrice(quote.getPrice())
-            .previousClose(quote.getPreviousClose())
-            .dailyChange(quote.getChange())
-            .dailyChangePercentage(quote.getChangeInPercent())
-            .high(quote.getDayHigh())
-            .low(quote.getDayLow())
-            .open(quote.getOpen())
-            .volume(quote.getVolume())
-            .timestamp(LocalDateTime.now())
-            .isMarketOpen(quote.getPrice() != null) // Simplification
-            .currency(stock.getCurrency())
-            .exchange(stock.getStockExchange())
-            .dataSource("Yahoo Finance")
-            .lastUpdated(LocalDateTime.now())
-            .hasError(false)
-            .build();
+        return results;
     }
 }
