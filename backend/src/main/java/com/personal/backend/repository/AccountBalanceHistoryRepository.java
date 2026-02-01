@@ -6,11 +6,14 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AccountBalanceHistoryRepository extends JpaRepository<AccountBalanceHistory, Long> {
     
     List<AccountBalanceHistory> findByAccountId(Long accountId);
+    
+    Optional<AccountBalanceHistory> findByAccountIdAndDate(Long accountId, LocalDate date);
     
     List<AccountBalanceHistory> findByAccountIdAndDateBetweenOrderByDateAsc(Long accountId, LocalDate startDate, LocalDate endDate);
     
