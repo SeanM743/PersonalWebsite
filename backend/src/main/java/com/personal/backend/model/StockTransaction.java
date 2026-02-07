@@ -28,7 +28,6 @@ public class StockTransaction {
     private Long id;
 
     @Column(nullable = false)
-    @NotNull(message = "User ID is required")
     private Long userId;
 
     @Column(nullable = false, length = 10)

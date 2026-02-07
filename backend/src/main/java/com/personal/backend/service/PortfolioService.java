@@ -63,7 +63,10 @@ public class PortfolioService {
     /**
      * Get complete portfolio summary with real-time market data
      */
-    @Transactional(readOnly = true)
+    /**
+     * Get complete portfolio summary with real-time market data
+     */
+    @Transactional
     public PortfolioResponse<PortfolioSummary> getPortfolioSummary(Long userId) {
         try {
             log.info("Generating portfolio summary for user {}", userId);
@@ -79,12 +82,21 @@ public class PortfolioService {
                 return PortfolioResponse.success(createEmptyPortfolioSummary(userId), "Portfolio is empty");
             }
             
-            // Get market data for all symbols
-            List<String> symbols = holdings.stream()
-                    .map(StockTicker::getSymbol)
-                    .toList();
-            
-            Map<String, MarketData> marketDataMap = getMarketDataForSymbols(symbols);
+            // Optimize: Construct market data directly from holdings (already hydrated)
+            // This guarantees consistency between the table (Holdings) and the sidebar (Summary)
+            Map<String, MarketData> marketDataMap = holdings.stream()
+                .filter(h -> h.getCurrentPrice() != null)
+                .collect(Collectors.toMap(
+                    StockTicker::getSymbol,
+                    h -> MarketData.builder()
+                            .symbol(h.getSymbol())
+                            .currentPrice(h.getCurrentPrice())
+                            .dailyChange(h.getDailyChange())
+                            .dailyChangePercentage(h.getDailyChangePercentage())
+                            .timestamp(h.getLastPriceUpdate())
+                            .isMarketOpen(h.getIsMarketOpen())
+                            .build()
+                ));
             
             // Calculate performance metrics
             PerformanceCalculator.PerformanceMetrics metrics = performanceCalculator.calculatePerformanceMetrics(holdings, marketDataMap);
@@ -115,11 +127,6 @@ public class PortfolioService {
                         if (startVal.compareTo(BigDecimal.ZERO) > 0) {
                              stockYtdGainPct = stockYtdGain.divide(startVal, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
                         }
-                    } else {
-                        // If no history this year, maybe assume start value 0? Or N/A.
-                        // For "All Time" logic, cost basis is used. For YTD, if no history, start value is unknown (or 0).
-                        // If account is new this year, start value is 0.
-                        // We'll leave as null or 0.
                     }
                 }
             } catch (Exception e) {
@@ -159,7 +166,7 @@ public class PortfolioService {
         }
     }
     
-    @Transactional(readOnly = true)
+    @Transactional
     public PortfolioResponse<PortfolioSummary> getDetailedPortfolioSummary(Long userId) {
         try {
             log.info("Generating detailed portfolio summary for user {}", userId);
@@ -610,13 +617,14 @@ public class PortfolioService {
         try {
             List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
             if (!accounts.isEmpty()) {
-                Account stockAccount = accounts.get(0);
-                if (stockAccount.getBalance().compareTo(currentValue) != 0) {
-                    log.info("Updating stock account balance in DB: ${} -> ${}", 
-                            stockAccount.getBalance(), currentValue);
-                    stockAccount.setBalance(currentValue);
-                    stockAccount.setUpdatedAt(LocalDateTime.now());
-                    accountRepository.save(stockAccount);
+                for (Account stockAccount : accounts) {
+                    if (stockAccount.getBalance().compareTo(currentValue) != 0) {
+                        log.info("Updating stock account balance in DB (ID: {}): ${} -> ${}", 
+                                stockAccount.getId(), stockAccount.getBalance(), currentValue);
+                        stockAccount.setBalance(currentValue);
+                        stockAccount.setUpdatedAt(LocalDateTime.now());
+                        accountRepository.save(stockAccount);
+                    }
                 }
             }
         } catch (Exception e) {

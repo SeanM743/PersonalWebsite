@@ -19,19 +19,23 @@ const Portfolio: React.FC = () => {
   // Prefetched stock data cache - available immediately when user clicks stock account
   const prefetchedDataRef = useRef<PrefetchedData | null>(null);
 
-  // Fetch accounts and prefetch stock data in parallel
+  // Fetch accounts and prefetch stock data sequentially to correct balance sync
   const fetchAccounts = async () => {
     setIsLoading(true);
     try {
-      // Fetch accounts AND stock data in parallel for faster loading
-      const [accountsRes, txnsRes, holdingsRes] = await Promise.all([
-        apiService.getAccounts(),
+      // 1. Fetch Transactions and Holdings first
+      // getHoldings triggers the DB balance update for stock accounts
+      const [txnsRes, holdingsRes] = await Promise.all([
         apiService.getTransactions(),
         apiService.getHoldings()
       ]);
 
-      if (accountsRes.success) {
-        setAccounts(accountsRes.data);
+      // 2. Fetch Accounts AFTER holdings have potentially updated the DB
+      // This ensures we get the latest calculated balance
+      const accountsRes = await apiService.getAccounts();
+
+      if ((accountsRes as any).success) {
+        setAccounts((accountsRes as any).data);
       }
 
       // Cache prefetched data for immediate use when stock account is selected

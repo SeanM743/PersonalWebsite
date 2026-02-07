@@ -26,7 +26,6 @@ public class WatchlistItem {
     private Long id;
 
     @Column(nullable = false)
-    @NotNull
     private Long userId;
 
     @Column(nullable = false, length = 10)

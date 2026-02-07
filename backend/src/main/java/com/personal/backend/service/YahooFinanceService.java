@@ -5,6 +5,7 @@ import com.personal.backend.dto.MarketData;
 import com.personal.backend.model.StockDailyPrice;
 import com.personal.backend.repository.StockDailyPriceRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -27,13 +28,17 @@ public class YahooFinanceService {
 
     private final StockDailyPriceRepository dailyPriceRepository;
     private final WebClient webClient;
+    private final PerformanceMetricsService performanceMetricsService;
     
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
     private String cookie = null;
     private String crumb = null;
 
-    public YahooFinanceService(StockDailyPriceRepository dailyPriceRepository, WebClient.Builder webClientBuilder) {
+    @Autowired
+    public YahooFinanceService(StockDailyPriceRepository dailyPriceRepository, WebClient.Builder webClientBuilder, 
+                               PerformanceMetricsService performanceMetricsService) {
         this.dailyPriceRepository = dailyPriceRepository;
+        this.performanceMetricsService = performanceMetricsService;
         
         // Configure HttpClient with increased header size to handle large Yahoo Cookies
         HttpClient httpClient = HttpClient.create()
@@ -324,6 +329,10 @@ public class YahooFinanceService {
     }
 
     private Optional<MarketData> getMarketDataWithRetry(String symbol, int retries) {
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
+        
         try {
             ensureAuthenticated();
             
@@ -359,6 +368,7 @@ public class YahooFinanceService {
             String name = result.has("shortName") ? result.path("shortName").asText() : 
                          (result.has("longName") ? result.path("longName").asText() : symbol);
             
+            success = true;
             return Optional.of(MarketData.builder()
                 .symbol(result.path("symbol").asText())
                 .companyName(name)
@@ -377,13 +387,26 @@ public class YahooFinanceService {
                 .build());
                 
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("429") && retries > 0) {
-                log.warn("Rate limited (429) for {}, retrying in 5 seconds... ({} retries left)", symbol, retries - 1);
-                try { Thread.sleep(5000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-                return getMarketDataWithRetry(symbol, retries - 1);
+            if (e.getMessage() != null && e.getMessage().contains("429")) {
+                statusCode = 429;
+                if (retries > 0) {
+                    log.warn("Rate limited (429) for {}, retrying in 5 seconds... ({} retries left)", symbol, retries - 1);
+                    try { Thread.sleep(5000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    return getMarketDataWithRetry(symbol, retries - 1);
+                }
+            } else if (e.getMessage() != null && e.getMessage().contains("401")) {
+                statusCode = 401;
+            } else if (e.getMessage() != null && e.getMessage().contains("403")) {
+                statusCode = 403;
+            } else {
+                statusCode = 500;
             }
             log.error("Error fetching market data for {}: {}", symbol, e.getLocalizedMessage());
             return Optional.empty();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "yahoo_finance", "quote", java.time.Duration.ofMillis(duration), success, statusCode);
         }
     }
 
@@ -397,6 +420,10 @@ public class YahooFinanceService {
         if (symbols == null || symbols.isEmpty()) {
             return Collections.emptyMap();
         }
+        
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
         
         try {
             ensureAuthenticated();
@@ -450,10 +477,12 @@ public class YahooFinanceService {
                 marketDataMap.put(symbol, data);
             }
             
+            success = true;
             return marketDataMap;
             
         } catch (org.springframework.web.reactive.function.client.WebClientResponseException e) {
-            if (e.getStatusCode().value() == 401 || e.getStatusCode().value() == 403) {
+            statusCode = e.getStatusCode().value();
+            if (statusCode == 401 || statusCode == 403) {
                 log.warn("Yahoo API returned 401/403 Unauthorized. Clearing credentials to force re-auth.");
                 this.cookie = null;
                 this.crumb = null;
@@ -461,8 +490,13 @@ public class YahooFinanceService {
             log.error("Failed to fetch batch market data: {}", e.getMessage());
             return Collections.emptyMap();
         } catch (Exception e) {
+            statusCode = 500;
             log.error("Failed to fetch batch market data: {}", e.getMessage());
             return Collections.emptyMap();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "yahoo_finance", "batch_quote", java.time.Duration.ofMillis(duration), success, statusCode);
         }
     }
     private final Map<String, CachedIntradayData> intradayCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -479,6 +513,10 @@ public class YahooFinanceService {
         if (cached != null && cached.fetchedAt.isAfter(LocalDateTime.now().minusMinutes(15))) {
             return cached.data;
         }
+
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
 
         try {
             ensureAuthenticated();
@@ -530,11 +568,17 @@ public class YahooFinanceService {
             // Update cache
             intradayCache.put(symbol, new CachedIntradayData(chartData, LocalDateTime.now()));
             
+            success = true;
             return chartData;
             
         } catch (Exception e) {
+            statusCode = 500;
             log.error("Error fetching intraday data for {}: {}", symbol, e.getMessage());
             return List.of();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "yahoo_finance", "intraday_chart", java.time.Duration.ofMillis(duration), success, statusCode);
         }
     }
 }

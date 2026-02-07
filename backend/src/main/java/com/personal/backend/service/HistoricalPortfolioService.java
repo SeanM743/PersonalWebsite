@@ -11,8 +11,12 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -49,36 +53,41 @@ public class HistoricalPortfolioService {
             startDate = earliestDate;
         }
         
-        // 2. Get stock portfolio account
-        List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
-        if (accounts.isEmpty()) {
-            log.warn("No stock account found");
-            return Collections.emptyList();
-        }
-        Account stockAccount = accounts.get(0); // Assuming single stock portfolio
-        
-        // 3. Check if we need to fill missing snapshots
-        List<AccountBalanceHistory> existingSnapshots = historyRepository
-            .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccount.getId(), startDate, endDate);
-        
-        // Calculate expected number of days
-        long expectedDays = java.time.temporal.ChronoUnit.DAYS.between(startDate, endDate) + 1;
-        
-        if (existingSnapshots.size() < expectedDays) {
-            log.info("Missing snapshots detected. Expected {}, found {}. Filling gaps...", 
-                expectedDays, existingSnapshots.size());
+        // 2. Fetch all history for all accounts in range
+        List<AccountBalanceHistory> allHistory = historyRepository
+            .findByDateBetweenOrderByDateAsc(startDate, endDate); // Assuming this method exists in repo as confirmed
             
-            // Fill missing snapshots for this account
+        if (allHistory.isEmpty()) {
+            log.warn("No history found, attempting backfill...");
             accountSnapshotService.fillMissingSnapshots();
-            
-            // Re-query to get complete data
-            existingSnapshots = historyRepository
-                .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccount.getId(), startDate, endDate);
+            allHistory = historyRepository.findByDateBetweenOrderByDateAsc(startDate, endDate);
         }
         
-        // 4. Convert to PortfolioHistoryPoint
-        List<PortfolioHistoryPoint> history = existingSnapshots.stream()
-            .map(h -> new PortfolioHistoryPoint(h.getDate(), h.getBalance()))
+        // 3. Group by Date and Sum
+        Map<LocalDate, BigDecimal> dailyTotals = new TreeMap<>(); // TreeMap to keep dates sorted
+        
+        for (AccountBalanceHistory h : allHistory) {
+            dailyTotals.merge(h.getDate(), h.getBalance(), BigDecimal::add);
+        }
+
+        // 4. [CRITICAL FIX] Force the "Today" point to match current live Total Net Worth
+        // This ensures the graph matches the header value immediately, covering any missing snapshots
+        try {
+            BigDecimal currentTotal = accountRepository.findAll().stream()
+                    .filter(a -> a.getBalance() != null)
+                    .map(Account::getBalance)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            
+            // Upsert today's value (replaces any partial snapshot data)
+            dailyTotals.put(LocalDate.now(), currentTotal);
+            log.info("Injected live total for today: {}", currentTotal);
+        } catch (Exception e) {
+            log.error("Failed to inject live total: {}", e.getMessage());
+        }
+        
+        // 5. Convert to PortfolioHistoryPoint
+        List<PortfolioHistoryPoint> history = dailyTotals.entrySet().stream()
+            .map(entry -> new PortfolioHistoryPoint(entry.getKey(), entry.getValue()))
             .collect(Collectors.toList());
         
         log.info("Returning {} portfolio history points from {} to {}", 

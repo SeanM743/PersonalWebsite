@@ -33,22 +33,27 @@ services:
 
   # Grafana - Visualization and dashboards
   grafana:
-    image: grafana/grafana:9.3.2
+    image: grafana/grafana:9.5.15
     container_name: grafana
     restart: unless-stopped
     ports:
       - "3001:3000"  # Using 3001 to avoid conflict with potential frontend dev server
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Main Org.
+      - GF_LOG_LEVEL=debug
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     networks:
       - monitoring
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - prometheus
     healthcheck:

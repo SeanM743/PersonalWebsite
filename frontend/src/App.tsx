@@ -12,7 +12,6 @@ import Portfolio from './pages/Portfolio';
 import Calendar from './pages/Calendar';
 import Content from './pages/Content';
 import Chat from './pages/Chat';
-import Monitoring from './pages/Monitoring';
 import LifeEvents from './pages/LifeEvents';
 import LoadingSpinner from './components/UI/LoadingSpinner';
 
@@ -43,7 +42,6 @@ const AppContent: React.FC = () => {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/content" element={<Content />} />
           <Route path="/chat" element={<Chat />} />
-          <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/life-events" element={<LifeEvents />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

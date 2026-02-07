@@ -273,7 +273,11 @@ public class LifeLogService {
             // Map LifeLogType to MediaType
             com.personal.backend.model.MediaType mediaType = null;
             try {
-                mediaType = com.personal.backend.model.MediaType.valueOf(type.name());
+                if (type == LifeLogType.SHOW) {
+                    mediaType = com.personal.backend.model.MediaType.TV_SHOW;
+                } else {
+                    mediaType = com.personal.backend.model.MediaType.valueOf(type.name());
+                }
             } catch (IllegalArgumentException e) {
                 // Type might not exist in MediaType enum or mapping is different
                 log.warn("LifeLogType {} not directly mappable to MediaType", type);
@@ -391,8 +395,8 @@ public class LifeLogService {
         }
         
         // Metadata length validation
-        if (request.getMetadata() != null && request.getMetadata().length() > 1000) {
-            result.addError("metadata", "Metadata cannot exceed 1000 characters");
+        if (request.getMetadata() != null && request.getMetadata().length() > 10000) {
+            result.addError("metadata", "Metadata cannot exceed 10000 characters");
         }
         
         return result;

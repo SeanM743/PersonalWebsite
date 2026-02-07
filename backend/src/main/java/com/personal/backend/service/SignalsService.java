@@ -23,16 +23,34 @@ public class SignalsService {
     
     private final FamilyMemberRepository familyMemberRepository;
     private final ContentValidationService validationService;
+    private final com.personal.backend.repository.GlobalSettingRepository globalSettingRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     
     @Value("${signals.berkeley.graduation-date:2026-06-15}")
-    private String berkeleyGraduationDate;
+    private String defaultBerkeleyGraduationDate;
     
-    // Bears Tracker - Placeholder implementation
-    public ContentResponse<BearsGameInfo> getNextGame() {
+    // Bears Tracker
+    public ContentResponse<BearsTrackerResponse> getBearsTrackerData() {
         try {
-            // TODO: Integrate with NFL API
-            // For now, return a placeholder
-            BearsGameInfo gameInfo = BearsGameInfo.builder()
+            // Try to get from DB first
+            String json = globalSettingRepository.findByKey("bears.tracker_data")
+                    .map(com.personal.backend.model.GlobalSetting::getValue)
+                    .orElse(null);
+            
+            if (json != null) {
+                try {
+                    BearsTrackerResponse savedData = objectMapper.readValue(json, BearsTrackerResponse.class);
+                    // Ensure isApiAvailable is true for manual data
+                    savedData.setApiAvailable(true); 
+                    return ContentResponse.success(savedData, "Bears tracker data retrieved from settings");
+                } catch (Exception e) {
+                    log.error("Failed to parse saved Bears data", e);
+                }
+            }
+            
+            // Fallback to Mock Data (Default)
+            // Mock Data for "Next Game"
+            BearsGameInfo nextGame = BearsGameInfo.builder()
                     .opponent("Green Bay Packers")
                     .gameDate(LocalDateTime.now().plusDays(3).withHour(12).withMinute(0))
                     .gameTime("12:00 PM CT")
@@ -40,24 +58,13 @@ public class SignalsService {
                     .isCompleted(false)
                     .isHome(true)
                     .status("SCHEDULED")
-                    .isStale(false) 
+                    .isStale(false)
                     .build();
-            
-            return ContentResponse.success(gameInfo, "Bears game info (placeholder data)");
-            
-        } catch (Exception e) {
-            log.error("Error retrieving Bears game info", e);
-            return ContentResponse.error("Failed to retrieve Bears game info: " + e.getMessage());
-        }
-    }
-    
-    public ContentResponse<BearsGameInfo> getLastGameResult() {
-        try {
-            // TODO: Integrate with NFL API
-            // For now, return a placeholder
-            BearsGameInfo gameInfo = BearsGameInfo.builder()
+
+            // Mock Data for "Last Game"
+            BearsGameInfo lastGame = BearsGameInfo.builder()
                     .opponent("Minnesota Vikings")
-                    .gameDate(LocalDateTime.now().minusDays(4))
+                    .gameDate(LocalDateTime.now().minusDays(4)) // 4 days ago
                     .isCompleted(true)
                     .homeScore(24)
                     .awayScore(17)
@@ -66,31 +73,96 @@ public class SignalsService {
                     .isStale(false)
                     .build();
             
-            return ContentResponse.success(gameInfo, "Bears last game result (placeholder data)");
+            // Mock Record
+            BearsTrackerResponse.TeamRecord record = BearsTrackerResponse.TeamRecord.builder()
+                    .wins(10)
+                    .losses(7)
+                    .ties(0)
+                    .build();
+
+            BearsTrackerResponse response = BearsTrackerResponse.builder()
+                    .nextGame(nextGame)
+                    .lastGame(lastGame)
+                    .record(record)
+                    .isApiAvailable(true) 
+                    .lastUpdated(LocalDateTime.now())
+                    .isCachedData(false)
+                    .build();
+            
+            return ContentResponse.success(response, "Bears tracker data retrieved successfully (default)");
             
         } catch (Exception e) {
-            log.error("Error retrieving Bears last game result", e);
-            return ContentResponse.error("Failed to retrieve Bears last game result: " + e.getMessage());
+            log.error("Error retrieving Bears tracker data", e);
+            return ContentResponse.error("Failed to retrieve Bears data: " + e.getMessage());
         }
+    }
+
+    @Transactional
+    public ContentResponse<BearsTrackerResponse> updateBearsTrackerData(BearsTrackerResponse data) {
+        try {
+            // Update timestamp
+            data.setLastUpdated(LocalDateTime.now());
+            data.setApiAvailable(true); // Always true for manual entry
+            data.setCachedData(false);
+            
+            String json = objectMapper.writeValueAsString(data);
+            
+            com.personal.backend.model.GlobalSetting setting = globalSettingRepository.findByKey("bears.tracker_data")
+                    .orElse(com.personal.backend.model.GlobalSetting.builder()
+                            .key("bears.tracker_data")
+                            .build());
+            
+            setting.setValue(json);
+            setting.setUpdatedAt(LocalDateTime.now());
+            globalSettingRepository.save(setting);
+            
+            return ContentResponse.success(data, "Bears data updated successfully");
+            
+        } catch (Exception e) {
+            log.error("Error updating Bears tracker data", e);
+            return ContentResponse.error("Failed to update Bears data: " + e.getMessage());
+        }
+    }
+
+    public ContentResponse<BearsGameInfo> getNextGame() {
+        return ContentResponse.success(getBearsTrackerData().getData().getNextGame());
+    }
+    
+    public ContentResponse<BearsGameInfo> getLastGameResult() {
+         return ContentResponse.success(getBearsTrackerData().getData().getLastGame());
     }
     
     // Berkeley Countdown
     public ContentResponse<CountdownInfo> getBerkeleyCountdown() {
+        return getCountdown("berkeley.graduation_date", defaultBerkeleyGraduationDate, "Berkeley Graduation", 
+            "Kanika graduated from UC Berkeley!", "Days until Kanika's graduation from UC Berkeley");
+    }
+
+    // NFL Draft Countdown
+    public ContentResponse<CountdownInfo> getNFLDraftCountdown() {
+        return getCountdown("nfl.draft_date", "2026-04-23", "NFL Draft", 
+            "The NFL Draft has arrived!", "Days until the NFL Draft");
+    }
+
+    private ContentResponse<CountdownInfo> getCountdown(String key, String defaultValue, String label, String pastDesc, String futureDesc) {
         try {
-            LocalDate targetDate = LocalDate.parse(berkeleyGraduationDate);
+            // Try to get from DB first, fall back to property
+            String dateStr = globalSettingRepository.findByKey(key)
+                    .map(com.personal.backend.model.GlobalSetting::getValue)
+                    .orElse(defaultValue);
+            
+            LocalDate targetDate = LocalDate.parse(dateStr);
             LocalDate currentDate = LocalDate.now();
             
             long daysRemaining = ChronoUnit.DAYS.between(currentDate, targetDate);
             boolean isPast = targetDate.isBefore(currentDate);
             
-            String description = isPast ? 
-                "Kanika graduated from UC Berkeley!" : 
-                "Days until Kanika's graduation from UC Berkeley";
+            String description = isPast ? pastDesc : futureDesc;
             
             CountdownInfo countdown = CountdownInfo.builder()
                     .targetDate(targetDate)
                     .daysRemaining(Math.abs(daysRemaining))
-                    .label("Berkeley Graduation")
+                    .label(label)
                     .isPast(isPast)
                     .description(description)
                     .build();
@@ -98,8 +170,45 @@ public class SignalsService {
             return ContentResponse.success(countdown);
             
         } catch (Exception e) {
-            log.error("Error calculating Berkeley countdown", e);
+            log.error("Error calculating countdown for " + label, e);
             return ContentResponse.error("Failed to calculate countdown: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public ContentResponse<CountdownInfo> updateBerkeleyGraduationDate(String dateStr) {
+        return updateCountdownDate("berkeley.graduation_date", dateStr);
+    }
+
+    @Transactional
+    public ContentResponse<CountdownInfo> updateNFLDraftDate(String dateStr) {
+        return updateCountdownDate("nfl.draft_date", dateStr);
+    }
+    
+    private ContentResponse<CountdownInfo> updateCountdownDate(String key, String dateStr) {
+        try {
+            // Validate date format
+            LocalDate.parse(dateStr); // Throws exception if invalid
+            
+            com.personal.backend.model.GlobalSetting setting = globalSettingRepository.findByKey(key)
+                    .orElse(com.personal.backend.model.GlobalSetting.builder()
+                            .key(key)
+                            .build());
+            
+            setting.setValue(dateStr);
+            setting.setUpdatedAt(LocalDateTime.now());
+            globalSettingRepository.save(setting);
+            
+            // Return the updated countdown. We need to know WHICH one to return based on key
+            // Ideally we'd pass the getter or simpler, just call one based on key.
+            // For now, simpler branching:
+            if (key.contains("berkeley")) return getBerkeleyCountdown();
+            if (key.contains("nfl")) return getNFLDraftCountdown();
+            return ContentResponse.error("Unknown countdown key");
+            
+        } catch (Exception e) {
+            log.error("Error updating date for " + key, e);
+            return ContentResponse.error("Failed to update date: " + e.getMessage());
         }
     }
     

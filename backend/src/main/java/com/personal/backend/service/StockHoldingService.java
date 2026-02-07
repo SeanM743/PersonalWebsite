@@ -8,7 +8,9 @@ import com.personal.backend.model.StockTicker;
 import com.personal.backend.repository.StockTickerRepository;
 import com.personal.backend.repository.StockTickerRepository;
 import com.personal.backend.repository.StockTransactionRepository;
+import com.personal.backend.repository.AccountRepository;
 import com.personal.backend.model.StockTransaction;
+import com.personal.backend.model.Account;
 import com.personal.backend.util.FinancialCalculationUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.personal.backend.dto.MarketData;
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -37,6 +40,8 @@ public class StockHoldingService {
     
     private final StockTickerRepository stockRepository;
     private final StockTransactionRepository transactionRepository;
+    private final AccountRepository accountRepository;
+    private final com.personal.backend.repository.AccountBalanceHistoryRepository historyRepository;
     private final FinancialValidator financialValidator;
     private final YahooFinanceService yahooFinanceService;
     private final StockPriceCacheService stockPriceCacheService;
@@ -220,7 +225,7 @@ public class StockHoldingService {
     /**
      * Get all stock holdings for a user
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public PortfolioResponse<List<StockTicker>> getUserStockHoldings(Long userId) {
         try {
             log.debug("Retrieving stock holdings for user {}", userId);
@@ -262,6 +267,47 @@ public class StockHoldingService {
                             totalInvestment.divide(BigDecimal.valueOf(holdings.size()), 2, java.math.RoundingMode.HALF_UP),
                     "maxPositionsAllowed", maxPositionsPerUser
             );
+
+            // Sync the STOCK_PORTFOLIO account balance in the database
+            // This ensures logic order: GetHoldings -> UpdateDB -> GetAccounts -> Returns fresh balance
+            try {
+                BigDecimal totalCurrentValue = holdings.stream()
+                        .map(h -> h.getCurrentValue() != null ? h.getCurrentValue() : BigDecimal.ZERO)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                List<Account> accounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
+                for (Account stockAccount : accounts) {
+                     if (stockAccount.getBalance().compareTo(totalCurrentValue) != 0) {
+                         log.info("Auto-syncing stock account balance (ID: {}): ${} -> ${}", 
+                                 stockAccount.getId(), stockAccount.getBalance(), totalCurrentValue);
+                         stockAccount.setBalance(totalCurrentValue);
+                         stockAccount.setUpdatedAt(LocalDateTime.now());
+                         accountRepository.save(stockAccount);
+                         
+                         // Update today's history snapshot as well
+                         LocalDate today = LocalDate.now();
+                         java.util.Optional<com.personal.backend.model.AccountBalanceHistory> historyOpt = 
+                             historyRepository.findByAccountIdAndDate(stockAccount.getId(), today);
+                             
+                         com.personal.backend.model.AccountBalanceHistory history;
+                         if (historyOpt.isPresent()) {
+                             history = historyOpt.get();
+                             history.setBalance(totalCurrentValue);
+                             history.setRecordedAt(LocalDateTime.now());
+                         } else {
+                             history = com.personal.backend.model.AccountBalanceHistory.builder()
+                                     .accountId(stockAccount.getId())
+                                     .date(today)
+                                     .balance(totalCurrentValue)
+                                     .recordedAt(LocalDateTime.now())
+                                     .build();
+                         }
+                         historyRepository.save(history);
+                     }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to auto-sync stock account balance: {}", e.getMessage());
+            }
             
             return PortfolioResponse.success(holdings, "Stock holdings retrieved successfully", metadata);
             

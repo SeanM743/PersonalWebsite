@@ -20,6 +20,7 @@ import LoadingSpinner from './UI/LoadingSpinner';
 
 interface TimelineProps {
   className?: string;
+  refreshTrigger?: number;
 }
 
 interface TimelineEntry extends LifeLogEntry {
@@ -33,7 +34,7 @@ interface TimelineLane {
   height: number;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
+const Timeline: React.FC<TimelineProps> = ({ className = "", refreshTrigger = 0 }) => {
   const [entries, setEntries] = useState<LifeLogEntry[]>([]);
   const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
   const [lanes, setLanes] = useState<TimelineLane[]>([]);
@@ -480,7 +481,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
 
   useEffect(() => {
     loadTimelineEntries();
-  }, []);
+  }, [refreshTrigger]);
 
   useEffect(() => {
     calculateTimelineLayout;
@@ -608,12 +609,12 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
 
       {/* Timeline */}
       {timelineEntries.length > 0 ? (
-        <div className={`relative ${isExpanded ? 'h-96' : 'h-64'} overflow-x-auto overflow-y-hidden`}>
+        <div className={`relative ${isExpanded ? 'min-h-96' : 'min-h-64'} h-auto overflow-x-auto overflow-y-hidden scrollbar-thin`}>
           <div
             className="relative w-full min-w-[800px]"
             style={{
               height: `${lanes.reduce((total, lane, index) =>
-                total + (lane.height || 60) + (index < lanes.length - 1 ? 10 : 0), 60
+                total + (lane.height || 60) + (index < lanes.length - 1 ? 10 : 0), 80
               )}px`
             }}
           >
@@ -656,7 +657,7 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                       ? 'opacity-100 scale-100'
                       : 'opacity-0 scale-95 pointer-events-none'
                       } ${isHovered
-                        ? 'shadow-xl scale-110 z-50 ring-2 ring-white ring-opacity-50'
+                        ? 'shadow-xl scale-110 z-[60] ring-2 ring-white ring-opacity-50'
                         : 'hover:shadow-lg hover:scale-105 hover:z-40'
                       }`}
                     style={{
@@ -673,7 +674,6 @@ const Timeline: React.FC<TimelineProps> = ({ className = "" }) => {
                     onClick={() => handleEntryClick(entry)}
                     onMouseEnter={() => handleEntryHover(entry.id)}
                     onMouseLeave={() => handleEntryHover(null)}
-                    title={`${entry.title} (${entry.type})`}
                   >
                     <div className="flex items-center space-x-2 h-full relative">
                       <div className="text-white flex-shrink-0 transition-transform duration-200 group-hover:scale-110">

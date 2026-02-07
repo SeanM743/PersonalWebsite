@@ -38,13 +38,23 @@ const MarketIndices: React.FC = () => {
         try {
             const response = await apiService.getMarketIndices();
             if (response && (response as any).success) {
-                const data = (response as any).data || [];
-                setIndices(data);
+                let data = (response as any).data;
+
+                // Handle double-wrapped response (apiService wraps backend's AccountResponse)
+                if (data && !Array.isArray(data) && data.data && Array.isArray(data.data)) {
+                    data = data.data;
+                }
+
+                const finalData = Array.isArray(data) ? data : [];
+                setIndices(finalData);
+
                 // Cache the result
-                localStorage.setItem(CACHE_KEY, JSON.stringify({
-                    data,
-                    timestamp: Date.now()
-                }));
+                if (finalData.length > 0) {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({
+                        data: finalData,
+                        timestamp: Date.now()
+                    }));
+                }
             }
         } catch (error) {
             console.error('Failed to load market indices:', error);
@@ -92,12 +102,15 @@ const MarketIndices: React.FC = () => {
                     <div key={index.symbol} className="flex items-center justify-between py-1">
                         <span className="text-sm text-muted">{index.name}</span>
                         <div className="text-right">
-                            <span className="text-sm font-medium text-main">
+                            <div className="text-sm font-medium text-main">
                                 {index.symbol === 'BTC-USD' || index.symbol === 'GC=F'
                                     ? `$${index.price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                                     : index.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                 }
-                            </span>
+                            </div>
+                            <div className={`text-xs ${(index.change || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                {(index.change || 0) >= 0 ? '+' : ''}{index.change?.toFixed(2)} ({(index.changePercent || 0).toFixed(2)}%)
+                            </div>
                         </div>
                     </div>
                 ))}

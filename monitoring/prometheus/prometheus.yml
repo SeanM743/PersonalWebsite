@@ -8,10 +8,10 @@ rule_files:
   - "alert_rules.yml"
 
 scrape_configs:
-  # Digital Command Center Application
+  # Digital Command Center Application (host machine)
   - job_name: 'digital-command-center'
     static_configs:
-      - targets: ['app:8080']
+      - targets: ['host.docker.internal:8080']
     metrics_path: '/actuator/prometheus'
     scrape_interval: 15s
     scrape_timeout: 10s

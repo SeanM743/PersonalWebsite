@@ -1,0 +1,12 @@
+package com.personal.backend.repository;
+
+import com.personal.backend.model.GlobalSetting;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+
+@Repository
+public interface GlobalSettingRepository extends JpaRepository<GlobalSetting, String> {
+    Optional<GlobalSetting> findByKey(String key);
+}

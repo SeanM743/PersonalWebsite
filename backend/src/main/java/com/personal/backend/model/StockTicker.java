@@ -45,7 +45,6 @@ public class StockTicker {
     private BigDecimal quantity;
     
     @Column(nullable = false)
-    @NotNull(message = "User ID is required")
     private Long userId;
     
     @Column(length = 500)

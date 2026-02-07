@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   GraduationCap,
   Calendar,
   Clock,
@@ -28,7 +28,19 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  /* Edit Mode State */
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDate, setEditDate] = useState('');
+
   const { error } = useNotification();
+
+  // Initialize edit date when data loads
+  useEffect(() => {
+    if (countdownData) {
+      setEditDate(countdownData.targetDate.split('T')[0]); // YYYY-MM-DD
+    }
+  }, [countdownData]);
 
   // Load countdown data
   const loadCountdownData = async (isRefresh = false) => {
@@ -38,21 +50,21 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
       } else {
         setIsLoading(true);
       }
-      
+
       const response = await apiService.getBerkeleyCountdown();
-      
+
       if (response.success) {
         setCountdownData(response.data);
       }
     } catch (err: any) {
       error('Failed to load Berkeley countdown', err.message);
-      
+
       // Set fallback data
       const targetDate = new Date('2026-06-01'); // Summer 2026 fallback
       const now = new Date();
       const diffTime = targetDate.getTime() - now.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      
+
       setCountdownData({
         targetDate: targetDate.toISOString(),
         daysRemaining: Math.max(0, diffDays),
@@ -81,7 +93,7 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
     const remainingDays = days % 365;
     const months = Math.floor(remainingDays / 30);
     const finalDays = remainingDays % 30;
-    
+
     return { years, months, days: finalDays };
   };
 
@@ -147,13 +159,30 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
   const timeBreakdown = getTimeBreakdown(countdownData.daysRemaining);
   const progressPercentage = getProgressPercentage(countdownData.daysRemaining);
 
+  const handleSaveDate = async () => {
+    if (!editDate) return;
+
+    try {
+      setIsRefreshing(true);
+      const response = await apiService.updateBerkeleyCountdown(editDate);
+      if (response.success) {
+        setCountdownData(response.data);
+        setIsEditing(false);
+      }
+    } catch (err: any) {
+      error('Failed to update date', err.message);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <div className={`bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl shadow-sm p-4 text-white relative overflow-hidden ${className}`}>
       {/* Background Elements */}
-      <div className="absolute top-2 right-2 opacity-10">
+      <div className="absolute top-2 right-2 opacity-10 pointer-events-none">
         <GraduationCap className="h-16 w-16" />
       </div>
-      
+
       {/* Sparkles Animation */}
       {countdownData.hasReached && (
         <div className="absolute inset-0 pointer-events-none">
@@ -169,16 +198,49 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
           <GraduationCap className="h-6 w-6 text-yellow-400" />
           <h3 className="text-lg font-bold">Berkeley Countdown</h3>
         </div>
-        
-        <button
-          onClick={() => loadCountdownData(true)}
-          disabled={isRefreshing}
-          className="p-1 hover:bg-white hover:bg-opacity-20 rounded transition-colors disabled:opacity-50"
-          title="Refresh countdown"
-        >
-          <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-        </button>
+
+        <div className="flex items-center space-x-1">
+          {/* Edit Button */}
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="p-1 hover:bg-white hover:bg-opacity-20 rounded transition-colors"
+            title="Edit Date"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+          </button>
+
+          <button
+            onClick={() => loadCountdownData(true)}
+            disabled={isRefreshing}
+            className="p-1 hover:bg-white hover:bg-opacity-20 rounded transition-colors disabled:opacity-50"
+            title="Refresh countdown"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
+
+      {/* Edit Mode UI */}
+      {isEditing && (
+        <div className="mb-4 bg-white bg-opacity-20 p-3 rounded-lg animate-fade-in">
+          <label className="block text-xs font-bold mb-1">Target Date</label>
+          <div className="flex space-x-2">
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="flex-1 bg-white bg-opacity-90 text-gray-900 rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-yellow-400"
+            />
+            <button
+              onClick={handleSaveDate}
+              disabled={isRefreshing}
+              className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-bold transition-colors"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       {countdownData.hasReached ? (
@@ -192,7 +254,7 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
           <p className="text-sm text-blue-200">
             The moment has finally arrived!
           </p>
-          
+
           <div className="mt-4 p-3 bg-white bg-opacity-20 rounded-lg">
             <p className="text-sm font-medium">Target Date Reached</p>
             <p className="text-xs text-blue-200">
@@ -244,7 +306,7 @@ const BerkeleyCountdown: React.FC<BerkeleyCountdownProps> = ({ className = "" })
               <span>{Math.round(progressPercentage)}%</span>
             </div>
             <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
-              <div 
+              <div
                 className="bg-gradient-to-r from-yellow-400 to-yellow-300 h-2 rounded-full transition-all duration-500"
                 style={{ width: `${progressPercentage}%` }}
               />

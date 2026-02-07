@@ -17,11 +17,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Optional;
 
+import com.personal.backend.service.PerformanceMetricsService;
+
 @Component
 @Slf4j
 public class TMDBClient {
     
     private final WebClient webClient;
+    private final PerformanceMetricsService performanceMetricsService;
     
     @Value("${tmdb.api.base.url:https://api.themoviedb.org/3}")
     private String baseUrl;
@@ -32,7 +35,8 @@ public class TMDBClient {
     @Value("${tmdb.api.timeout:10000}")
     private int timeoutMs;
     
-    public TMDBClient(WebClient.Builder webClientBuilder) {
+    public TMDBClient(WebClient.Builder webClientBuilder, PerformanceMetricsService performanceMetricsService) {
+        this.performanceMetricsService = performanceMetricsService;
         this.webClient = webClientBuilder
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024)) // 1MB
                 .build();
@@ -48,6 +52,10 @@ public class TMDBClient {
             log.warn("TMDB API key not configured, skipping movie search");
             return Optional.empty();
         }
+        
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
         
         try {
             log.debug("Searching TMDB for movie title: {}", title);
@@ -67,15 +75,26 @@ public class TMDBClient {
             if (response != null && response.hasResults()) {
                 MovieMetadata movie = response.getFirstResult();
                 log.info("Found movie metadata for title: {} -> {}", title, movie.getTitle());
+                success = true;
                 return Optional.of(movie);
             } else {
                 log.info("No movie found for title: {}", title);
+                success = true; // API call succeeded, just no results
                 return Optional.empty();
             }
             
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            statusCode = e.getStatusCode().value();
             log.error("Error searching TMDB for movie title: {}", title, e);
             return Optional.empty();
+        } catch (Exception e) {
+            statusCode = 500;
+            log.error("Error searching TMDB for movie title: {}", title, e);
+            return Optional.empty();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "tmdb", "search_movie", Duration.ofMillis(duration), success, statusCode);
         }
     }
     
@@ -89,6 +108,10 @@ public class TMDBClient {
             log.warn("TMDB API key not configured, skipping TV show search");
             return Optional.empty();
         }
+        
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
         
         try {
             log.debug("Searching TMDB for TV show title: {}", title);
@@ -108,15 +131,26 @@ public class TMDBClient {
             if (response != null && response.hasResults()) {
                 TVShowMetadata tvShow = response.getFirstResult();
                 log.info("Found TV show metadata for title: {} -> {}", title, tvShow.getName());
+                success = true;
                 return Optional.of(tvShow);
             } else {
                 log.info("No TV show found for title: {}", title);
+                success = true;
                 return Optional.empty();
             }
             
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            statusCode = e.getStatusCode().value();
             log.error("Error searching TMDB for TV show title: {}", title, e);
             return Optional.empty();
+        } catch (Exception e) {
+            statusCode = 500;
+            log.error("Error searching TMDB for TV show title: {}", title, e);
+            return Optional.empty();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "tmdb", "search_tv", Duration.ofMillis(duration), success, statusCode);
         }
     }
     
@@ -130,6 +164,10 @@ public class TMDBClient {
             log.warn("TMDB API key not configured, skipping movie details");
             return Optional.empty();
         }
+        
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
         
         try {
             log.debug("Getting TMDB movie details for ID: {}", movieId);
@@ -147,15 +185,26 @@ public class TMDBClient {
             
             if (movie != null) {
                 log.info("Found movie details for ID: {} -> {}", movieId, movie.getTitle());
+                success = true;
                 return Optional.of(movie);
             } else {
                 log.info("No movie found for ID: {}", movieId);
+                success = true;
                 return Optional.empty();
             }
             
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            statusCode = e.getStatusCode().value();
             log.error("Error getting TMDB movie details for ID: {}", movieId, e);
             return Optional.empty();
+        } catch (Exception e) {
+            statusCode = 500;
+            log.error("Error getting TMDB movie details for ID: {}", movieId, e);
+            return Optional.empty();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "tmdb", "movie_details", Duration.ofMillis(duration), success, statusCode);
         }
     }
     
@@ -169,6 +218,10 @@ public class TMDBClient {
             log.warn("TMDB API key not configured, skipping TV show details");
             return Optional.empty();
         }
+        
+        long startTime = System.currentTimeMillis();
+        boolean success = false;
+        int statusCode = 200;
         
         try {
             log.debug("Getting TMDB TV show details for ID: {}", tvShowId);
@@ -186,15 +239,26 @@ public class TMDBClient {
             
             if (tvShow != null) {
                 log.info("Found TV show details for ID: {} -> {}", tvShowId, tvShow.getName());
+                success = true;
                 return Optional.of(tvShow);
             } else {
                 log.info("No TV show found for ID: {}", tvShowId);
+                success = true;
                 return Optional.empty();
             }
             
-        } catch (Exception e) {
+        } catch (WebClientResponseException e) {
+            statusCode = e.getStatusCode().value();
             log.error("Error getting TMDB TV show details for ID: {}", tvShowId, e);
             return Optional.empty();
+        } catch (Exception e) {
+            statusCode = 500;
+            log.error("Error getting TMDB TV show details for ID: {}", tvShowId, e);
+            return Optional.empty();
+        } finally {
+            long duration = System.currentTimeMillis() - startTime;
+            performanceMetricsService.recordExternalApiCall(
+                "tmdb", "tv_details", Duration.ofMillis(duration), success, statusCode);
         }
     }
     

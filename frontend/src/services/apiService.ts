@@ -83,8 +83,9 @@ class ApiService {
   }
 
   async getHoldings() {
-    const cacheKey = 'holdings';
-    return this.cachedGet('/portfolio/holdings', cacheKey, 5 * 60 * 1000); // 5 minutes
+    // No caching to ensure we trigger backend balance sync
+    const response = await this.api.get('/portfolio/holdings');
+    return response.data;
   }
 
   async addHolding(holding: any) {
@@ -108,14 +109,13 @@ class ApiService {
   }
 
   async getTransactions() {
-    const cacheKey = 'transactions';
-    return this.cachedGet('/portfolio/transactions', cacheKey, 5 * 60 * 1000); // 5 minutes
+    // No caching for transactions
+    const response = await this.api.get('/portfolio/transactions');
+    return response.data;
   }
 
   async addTransaction(transaction: any) {
     // Clear caches when adding transaction
-    cacheService.delete('transactions');
-    cacheService.delete('holdings');
     cacheService.delete('accounts');
     const response = await this.api.post('/portfolio/transactions', transaction);
     return response.data;
@@ -123,8 +123,9 @@ class ApiService {
 
   // Account API
   async getAccounts() {
-    const cacheKey = 'accounts';
-    return this.cachedGet('/accounts', cacheKey, 5 * 60 * 1000); // 5 minutes
+    // No caching for accounts to ensure we get the latest balance updated by getHoldings
+    const response = await this.api.get('/accounts');
+    return response.data;
   }
 
   async getAccount(id: number) {
@@ -417,8 +418,32 @@ class ApiService {
     return response.data;
   }
 
+  async updateBearsTracker(data: any) {
+    const response = await this.api.put('/signals/bears', data);
+    return response.data;
+  }
+
   async getBerkeleyCountdown() {
     const response = await this.api.get('/signals/countdown');
+    return response.data;
+  }
+
+  async updateBerkeleyCountdown(date: string) {
+    const response = await this.api.put('/signals/countdown/berkeley', date, {
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    return response.data;
+  }
+
+  async getNFLDraftCountdown() {
+    const response = await this.api.get('/signals/countdown/nfl-draft');
+    return response.data;
+  }
+
+  async updateNFLDraftCountdown(date: string) {
+    const response = await this.api.put('/signals/countdown/nfl-draft', null, {
+      params: { date }
+    });
     return response.data;
   }
 
@@ -466,5 +491,39 @@ class ApiService {
     }
   }
 }
+
+// Sports Service API (Python/FastAPI on port 8000)
+const sportsApi = axios.create({
+  baseURL: 'http://localhost:8000/api/sports',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Helper for sports caching
+const cachedSportsGet = async <T>(url: string, cacheKey: string, ttlMs: number = 60 * 60 * 1000): Promise<T> => {
+  const cached = cacheService.get<T>(cacheKey);
+  if (cached) return cached;
+  const response = await sportsApi.get(url);
+  const data = response.data;
+  cacheService.set(cacheKey, data, ttlMs);
+  return data;
+};
+
+export const sportsService = {
+  async getStandings(year: number) {
+    return cachedSportsGet(`/standings/${year}`, `sports-standings-${year}`);
+  },
+
+  async getBearsSummary(year: number) {
+    // 30 min cache for summary as it might update during games
+    return cachedSportsGet(`/bears/summary/${year}`, `sports-summary-${year}`, 30 * 60 * 1000);
+  },
+
+  async getBearsRoster(year: number) {
+    // Long cache for roster
+    return cachedSportsGet(`/bears/roster/${year}`, `sports-roster-${year}`, 24 * 60 * 60 * 1000);
+  }
+};
 
 export const apiService = new ApiService();

@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Bell, User, LogOut } from 'lucide-react';
+import { Bell, User, LogOut, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import ThemeSwitcher from '../ThemeSwitcher';
 
@@ -12,7 +12,6 @@ const Header: React.FC = () => {
     { name: 'Finance', href: '/portfolio' },
     { name: 'Life', href: '/life-events' },
     { name: 'Calendar', href: '/calendar' },
-    { name: 'Monitoring', href: '/monitoring' },
   ];
 
   return (
@@ -47,6 +46,16 @@ const Header: React.FC = () => {
                 {item.name}
               </NavLink>
             ))}
+            {/* External Grafana link */}
+            <a
+              href="http://localhost:3001"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 text-sm font-medium rounded-lg transition-colors text-gray-600 hover:text-gray-900 hover:bg-gray-100 flex items-center gap-1"
+            >
+              Monitoring
+              <ExternalLink className="h-3 w-3" />
+            </a>
           </div>
 
           {/* Right side - User menu */}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search,
   Book,
@@ -62,6 +62,11 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { error, success } = useNotification();
+
+  // Refs for date inputs to trigger picker programmatically
+  const startDateRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
+  const movieDateRef = useRef<HTMLInputElement>(null);
 
   // Initialize form data when entry changes
   useEffect(() => {
@@ -482,8 +487,12 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
                     Date Watched
                   </label>
                   <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                    <Calendar
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted cursor-pointer hover:text-primary transition-colors"
+                      onClick={() => movieDateRef.current?.showPicker()}
+                    />
                     <input
+                      ref={movieDateRef}
                       type="date"
                       value={formData.endDate}
                       onChange={(e) => handleChange('endDate', e.target.value)}
@@ -507,8 +516,12 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
                       Start Date
                     </label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                      <Calendar
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => startDateRef.current?.showPicker()}
+                      />
                       <input
+                        ref={startDateRef}
                         type="date"
                         value={formData.startDate}
                         onChange={(e) => handleChange('startDate', e.target.value)}
@@ -523,8 +536,12 @@ const LifeLogEntryForm: React.FC<LifeLogEntryFormProps> = ({
                       End Date
                     </label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted" />
+                      <Calendar
+                        className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => endDateRef.current?.showPicker()}
+                      />
                       <input
+                        ref={endDateRef}
                         type="date"
                         value={formData.endDate}
                         onChange={(e) => handleChange('endDate', e.target.value)}

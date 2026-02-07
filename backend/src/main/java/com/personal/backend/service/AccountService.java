@@ -41,6 +41,9 @@ public class AccountService {
         accounts.stream()
                 .filter(a -> a.getType() == Account.AccountType.STOCK_PORTFOLIO)
                 .forEach(a -> a.setBalance(stockValue));
+        
+        // Sort by balance descending (highest value first)
+        accounts.sort((a1, a2) -> a2.getBalance().compareTo(a1.getBalance()));
                 
         return accounts;
     }

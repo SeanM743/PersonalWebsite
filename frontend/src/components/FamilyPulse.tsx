@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Users,
   Edit,
   Save,
@@ -44,7 +44,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
   // Get icon for family member based on their activity
   const getActivityIcon = (activity: string) => {
     const activityLower = activity.toLowerCase();
-    
+
     if (activityLower.includes('wsu') || activityLower.includes('college') || activityLower.includes('university')) {
       return <GraduationCap className="h-4 w-4 text-blue-500" />;
     } else if (activityLower.includes('driving') || activityLower.includes('car')) {
@@ -61,7 +61,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
   // Get status color
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
-    
+
     if (statusLower.includes('great') || statusLower.includes('excellent') || statusLower.includes('amazing')) {
       return 'text-green-600 bg-green-50 border-green-200';
     } else if (statusLower.includes('good') || statusLower.includes('well') || statusLower.includes('fine')) {
@@ -83,9 +83,9 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
       } else {
         setIsLoading(true);
       }
-      
+
       const response = await apiService.getFamilyPulse();
-      
+
       if (response.success) {
         setFamilyMembers(response.data || []);
       }
@@ -121,15 +121,15 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
   const saveMemberUpdate = async (memberId: number) => {
     try {
       const response = await apiService.updateFamilyMember(memberId, editForm);
-      
+
       if (response.success) {
         // Update the local state
-        setFamilyMembers(prev => prev.map(member => 
-          member.id === memberId 
+        setFamilyMembers(prev => prev.map(member =>
+          member.id === memberId
             ? { ...member, ...editForm, updatedAt: new Date().toISOString() }
             : member
         ));
-        
+
         success('Family member updated successfully');
         cancelEditing();
       }
@@ -146,7 +146,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
     const diffInHours = Math.floor(diffInMinutes / 60);
     const diffInDays = Math.floor(diffInHours / 24);
-    
+
     if (diffInMinutes < 1) {
       return 'Just now';
     } else if (diffInMinutes < 60) {
@@ -182,7 +182,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
   return (
     <div className={`bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl shadow-sm p-4 text-white relative overflow-hidden ${className}`}>
       {/* Background Element */}
-      <div className="absolute top-2 right-2 opacity-10">
+      <div className="absolute top-2 right-2 opacity-10 pointer-events-none">
         <Users className="h-16 w-16" />
       </div>
 
@@ -192,7 +192,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
           <Users className="h-6 w-6 text-pink-200" />
           <h3 className="text-lg font-bold">Family Pulse</h3>
         </div>
-        
+
         <button
           onClick={() => loadFamilyPulse(true)}
           disabled={isRefreshing}
@@ -230,7 +230,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
                       </button>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div>
                       <label className="block text-xs text-pink-200 mb-1">Primary Activity</label>
@@ -242,7 +242,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
                         placeholder="What are they up to?"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-xs text-pink-200 mb-1">Status</label>
                       <input
@@ -253,7 +253,7 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
                         placeholder="How are they doing?"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-xs text-pink-200 mb-1">Notes (Optional)</label>
                       <textarea
@@ -282,27 +282,27 @@ const FamilyPulse: React.FC<FamilyPulseProps> = ({ className = "" }) => {
                       <Edit className="h-4 w-4" />
                     </button>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div>
                       <div className="text-sm text-pink-200">Primary Activity</div>
                       <div className="font-medium">{member.primaryActivity}</div>
                     </div>
-                    
+
                     <div>
                       <div className="text-sm text-pink-200">Status</div>
                       <div className={`inline-block px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(member.status)}`}>
                         {member.status}
                       </div>
                     </div>
-                    
+
                     {member.notes && (
                       <div>
                         <div className="text-sm text-pink-200">Notes</div>
                         <div className="text-sm opacity-90">{member.notes}</div>
                       </div>
                     )}
-                    
+
                     <div className="flex items-center space-x-1 text-xs text-pink-200 pt-1">
                       <Clock className="h-3 w-3" />
                       <span>Updated {formatRelativeTime(member.updatedAt)}</span>

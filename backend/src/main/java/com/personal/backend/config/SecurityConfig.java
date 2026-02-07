@@ -61,6 +61,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/prometheus").permitAll()
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/api/test/**").permitAll()
+                .requestMatchers("/api/portfolio/market-indices").permitAll()
                 // Recalculation endpoint - allow for manual fix
                 .requestMatchers("/api/portfolio/recalculate").permitAll()
                 // WebSocket endpoints
@@ -73,6 +74,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/monitoring/**").authenticated()
                 // Content endpoints - allow guest access for now, will be refined later
                 .requestMatchers("/api/content/**").permitAll()
+                // Signals endpoints (Bears, Family Pulse) - allow public access for dashboard
+                .requestMatchers("/api/signals/**").permitAll()
                 // Chat endpoints - allow guest access for dashboard chat
                 .requestMatchers("/api/chat/**").permitAll()
                 // Admin-only endpoints (future use)

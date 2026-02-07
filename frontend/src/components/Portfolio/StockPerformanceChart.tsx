@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 import { apiService } from '../../services/apiService';
 import LoadingSpinner from '../UI/LoadingSpinner';
 
@@ -9,7 +9,14 @@ interface ChartDataPoint {
 }
 
 interface StockPerformanceChartProps {
-    holdings: Array<{ symbol: string; quantity: number; currentValue: number }>;
+    holdings: Array<{
+        symbol: string;
+        quantity: number;
+        currentValue: number;
+        currentPrice?: number;
+        dailyChange?: number;
+        dailyChangePercentage?: number;
+    }>;
     externalSymbol?: string; // Symbol set externally (e.g., from watchlist click)
 }
 
@@ -106,12 +113,26 @@ const StockPerformanceChart: React.FC<StockPerformanceChartProps> = ({ holdings,
         );
     }
 
-    const priceChange = chartData.length >= 2
-        ? (chartData[chartData.length - 1]?.price || 0) - (chartData[0]?.price || 0)
-        : 0;
-    const priceChangePercent = chartData.length >= 2 && (chartData[0]?.price || 0) > 0
-        ? ((priceChange / (chartData[0]?.price || 1)) * 100)
-        : 0;
+    // Determine price change values
+    let priceChange = 0;
+    let priceChangePercent = 0;
+    let previousClose = 0;
+
+    const currentHolding = holdings.find(h => h.symbol === selectedSymbol);
+
+    if (selectedPeriod === '1D' && currentHolding?.dailyChange !== undefined) {
+        // Correct 1D logic: use dailyChange from holding data
+        priceChange = currentHolding.dailyChange;
+        priceChangePercent = currentHolding.dailyChangePercentage || 0;
+        previousClose = (currentHolding.currentPrice || 0) - priceChange;
+    } else if (chartData.length >= 2) {
+        // Standard chart logic for other periods
+        priceChange = (chartData[chartData.length - 1]?.price || 0) - (chartData[0]?.price || 0);
+        priceChangePercent = (chartData[0]?.price || 0) > 0
+            ? ((priceChange / (chartData[0]?.price || 1)) * 100)
+            : 0;
+    }
+
     const isPositive = priceChange >= 0;
 
     return (
@@ -130,7 +151,7 @@ const StockPerformanceChart: React.FC<StockPerformanceChartProps> = ({ holdings,
                             </option>
                         ))}
                     </select>
-                    {chartData.length > 0 && (
+                    {(chartData.length > 0) && (
                         <span className={`text-sm font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
                             {isPositive ? '+' : ''}{priceChangePercent.toFixed(2)}%
                         </span>
@@ -224,6 +245,20 @@ const StockPerformanceChart: React.FC<StockPerformanceChartProps> = ({ holdings,
                                 strokeWidth={2}
                                 fill="url(#chartGradient)"
                             />
+                            {selectedPeriod === '1D' && previousClose > 0 && (
+                                <ReferenceLine
+                                    y={previousClose}
+                                    stroke="#9ca3af"
+                                    strokeDasharray="3 3"
+                                    opacity={0.5}
+                                    label={{
+                                        value: 'Prev Close',
+                                        position: 'right',
+                                        fill: '#9ca3af',
+                                        fontSize: 10
+                                    }}
+                                />
+                            )}
                         </AreaChart>
                     </ResponsiveContainer>
                 )}

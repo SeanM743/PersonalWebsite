@@ -18,9 +18,15 @@ public class SignalsController {
     
     // Bears Tracker endpoints
     @GetMapping("/bears")
-    public ResponseEntity<ContentResponse<BearsGameInfo>> getBearsGameInfo() {
-        ContentResponse<BearsGameInfo> response = signalsService.getNextGame();
+    public ResponseEntity<ContentResponse<BearsTrackerResponse>> getBearsGameInfo() {
+        ContentResponse<BearsTrackerResponse> response = signalsService.getBearsTrackerData();
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/bears")
+    public ResponseEntity<ContentResponse<BearsTrackerResponse>> updateBearsGameInfo(@RequestBody BearsTrackerResponse data) {
+        ContentResponse<BearsTrackerResponse> response = signalsService.updateBearsTrackerData(data);
+        return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
     }
     
     @GetMapping("/bears/next")
@@ -46,6 +52,27 @@ public class SignalsController {
     public ResponseEntity<ContentResponse<CountdownInfo>> getBerkeleyCountdownAlias() {
         ContentResponse<CountdownInfo> response = signalsService.getBerkeleyCountdown();
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/countdown/berkeley")
+    public ResponseEntity<ContentResponse<CountdownInfo>> updateBerkeleyCountdown(@RequestBody String date) {
+        // Simple string body (YYYY-MM-DD), might need trimming if JSON quotes included
+        String cleanDate = date.replace("\"", "");
+        ContentResponse<CountdownInfo> response = signalsService.updateBerkeleyGraduationDate(cleanDate);
+        return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
+    }
+
+    @GetMapping("/countdown/nfl-draft")
+    public ResponseEntity<ContentResponse<CountdownInfo>> getNFLDraftCountdown() {
+        ContentResponse<CountdownInfo> response = signalsService.getNFLDraftCountdown();
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/countdown/nfl-draft")
+    public ResponseEntity<ContentResponse<CountdownInfo>> updateNFLDraftCountdown(@RequestBody String date) {
+        String cleanDate = date.replace("\"", "");
+        ContentResponse<CountdownInfo> response = signalsService.updateNFLDraftDate(cleanDate);
+        return response.isSuccess() ? ResponseEntity.ok(response) : ResponseEntity.badRequest().body(response);
     }
     
     // Family Pulse endpoints

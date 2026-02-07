@@ -53,7 +53,7 @@ public class LifeLogEntry {
     @Column(name = "external_id")
     private String externalId;
     
-    @Column(length = 1000)
+    @Column(length = 10000)
     private String metadata; // JSON for additional type-specific data
     
     @Column(name = "created_at")

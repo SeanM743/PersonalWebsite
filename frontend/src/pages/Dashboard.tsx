@@ -64,6 +64,7 @@ const Dashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isNewUpdateModalOpen, setIsNewUpdateModalOpen] = useState(false);
+  const [lifeLogUpdateTrigger, setLifeLogUpdateTrigger] = useState(0);
   const { error } = useNotification();
 
   const loadDashboardData = async () => {
@@ -113,7 +114,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-page min-h-screen transition-colors duration-300">
+    <div className="w-full p-6 bg-page min-h-screen transition-colors duration-300">
       {/* Digital Command Center - Bento Grid Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 auto-rows-min">
 
@@ -128,12 +129,19 @@ const Dashboard: React.FC = () => {
 
         {/* Life Log Section (spans 2 columns) */}
         <ErrorBoundary>
-          <LifeLogView className="md:col-span-2 lg:col-span-2 xl:col-span-3" compact={true} />
+          <LifeLogView
+            className="md:col-span-2 lg:col-span-2 xl:col-span-3"
+            compact={true}
+            onEntryChange={() => setLifeLogUpdateTrigger(prev => prev + 1)}
+          />
         </ErrorBoundary>
 
         {/* Timeline Section (spans full width on small screens, 3 columns on large screens) */}
         <ErrorBoundary>
-          <Timeline className="md:col-span-2 lg:col-span-4 xl:col-span-6" />
+          <Timeline
+            className="md:col-span-2 lg:col-span-4 xl:col-span-6"
+            refreshTrigger={lifeLogUpdateTrigger}
+          />
         </ErrorBoundary>
 
 

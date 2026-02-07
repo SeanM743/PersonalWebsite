@@ -65,9 +65,10 @@ interface PageResponse<T> {
 interface LifeLogViewProps {
   className?: string;
   compact?: boolean;
+  onEntryChange?: () => void;
 }
 
-const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = false }) => {
+const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = false, onEntryChange }) => {
   const [entries, setEntries] = useState<LifeLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<LifeLogType | 'ALL'>('ALL');
@@ -152,6 +153,7 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
       await apiService.deleteLifeLogEntry(entry.id);
       success('Entry deleted successfully');
       loadEntries(); // Reload entries
+      if (onEntryChange) onEntryChange();
     } catch (err: any) {
       error('Failed to delete entry', err.message);
     }
@@ -159,6 +161,7 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
 
   const handleFormSave = () => {
     loadEntries(); // Reload entries after save
+    if (onEntryChange) onEntryChange();
   };
 
   const handleFormClose = () => {
@@ -209,8 +212,8 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
           <button
             onClick={() => setSelectedType('ALL')}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedType === 'ALL'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+              ? 'bg-primary text-primary-foreground'
+              : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
               }`}
           >
             All
@@ -220,8 +223,8 @@ const LifeLogView: React.FC<LifeLogViewProps> = ({ className = "", compact = fal
               key={type}
               onClick={() => setSelectedType(type)}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${selectedType === type
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
                 }`}
             >
               {formatType(type)}

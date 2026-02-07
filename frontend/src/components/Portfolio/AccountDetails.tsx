@@ -38,6 +38,8 @@ interface Holding {
     purchasePrice: number;
     totalGainLoss: number;
     totalGainLossPercentage: number;
+    dailyChange?: number;
+    dailyChangePercentage?: number;
 }
 
 interface AccountDetailsProps {
@@ -132,7 +134,11 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
 
             if (txnsRes && (txnsRes as any).success) setTransactions((txnsRes as any).data || []);
             if (holdingsRes && (holdingsRes as any).success) setHoldings((holdingsRes as any).data || []);
-            if (portfolioRes && (portfolioRes as any).success) setPortfolioSummary((portfolioRes as any).data || {});
+            if (portfolioRes && (portfolioRes as any).success) {
+                setPortfolioSummary((portfolioRes as any).data || {});
+                // Trigger parent update to refresh sidebar balance with new portfolio value
+                onUpdate();
+            }
 
         } catch (e) {
             console.error("Failed to load stock data", e);
@@ -190,326 +196,358 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     // Calculate stats
     const totalGainLoss = isStockAccount ? holdings.reduce((sum, h) => sum + (h.totalGainLoss || 0), 0) : 0;
 
-    return (
-        <div className="p-6 space-y-6 animate-fadeIn">
-            {/* Account Header */}
-            <div className="bg-card rounded-lg p-6 shadow-sm border border-border flex justify-between items-center">
-                <div>
-                    <div className="flex items-center space-x-2 text-muted text-sm mb-1">
-                        <span>{account.type.replace('_', ' ')}</span>
-                        {account.isManual && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Manual</span>
-                        )}
-                    </div>
-                    <h1 className="text-3xl font-bold text-main">{account.name}</h1>
-                    <div className="text-sm text-muted mt-1">
-                        {isStockAccount ? (
-                            `Updated as of ${getLastTradingDateFormatted()} (Market Close)`
-                        ) : (
-                            `Last updated: ${account.updatedAt ? new Date(account.updatedAt).toLocaleDateString() : 'Never'}`
-                        )}
-                    </div>
-                </div>
+    // Calculate Day Change
+    const totalCurrentValue = isStockAccount ? holdings.reduce((sum, h) => sum + (h.currentValue || 0), 0) : 0;
+    const totalDayChange = isStockAccount ? holdings.reduce((sum, h) => sum + ((h.dailyChange || 0) * h.quantity), 0) : 0;
+    const previousValue = totalCurrentValue - totalDayChange;
+    const totalDayChangePercent = previousValue !== 0 ? (totalDayChange / previousValue) * 100 : 0;
 
-                <div className="text-right">
-                    <div className="text-sm text-muted mb-1">Current Balance</div>
-                    {isEditing ? (
-                        <div className="flex items-center space-x-2 justify-end">
-                            <span className="text-2xl font-bold text-main">$</span>
-                            <input
-                                type="number"
-                                value={editBalance}
-                                onChange={(e) => setEditBalance(parseFloat(e.target.value))}
-                                className="text-2xl font-bold bg-page border border-border rounded px-2 w-48 text-main text-right"
-                            />
-                            <div className="flex flex-col space-y-1">
-                                <button onClick={handleUpdateBalance} className="bg-primary text-white px-2 py-1 rounded text-xs">Save</button>
-                                <button onClick={() => setIsEditing(false)} className="text-muted text-xs hover:text-main">Cancel</button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="group">
-                            <div className="flex items-center justify-end">
-                                <div className="text-4xl font-bold text-main">
-                                    ${(isStockAccount ? holdings.reduce((sum, h) => sum + (h.currentValue || 0), 0) : account.balance)
-                                        .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    return (
+        <div className="p-6 animate-fadeIn">
+            <div className={`grid grid-cols-1 gap-6 ${isStockAccount ? 'lg:grid-cols-[80fr_20fr]' : ''}`}>
+
+                {/* Left Column: Header + Content */}
+                <div className="space-y-6">
+                    {/* Account Header */}
+                    <div className="bg-card rounded-lg p-6 shadow-sm border border-border flex justify-between items-center">
+                        <div>
+                            {account.isManual && (
+                                <div className="flex items-center space-x-2 text-muted text-sm mb-1">
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Manual</span>
                                 </div>
-                                {account.isManual && (
-                                    <button onClick={() => { setEditBalance(account.balance); setIsEditing(true); }} className="ml-3 p-2 hover:bg-page rounded-full text-muted hover:text-primary transition-colors">
-                                        <Edit2 className="h-4 w-4" />
-                                    </button>
+                            )}
+                            <h1 className="text-3xl font-bold text-main">{account.name}</h1>
+                            <div className="text-sm text-muted mt-1">
+                                {isStockAccount ? (
+                                    `Updated as of ${getLastTradingDateFormatted()} (Market Close)`
+                                ) : (
+                                    `Last updated: ${account.updatedAt ? new Date(account.updatedAt).toLocaleDateString() : 'Never'}`
                                 )}
                             </div>
-                            {isStockAccount && portfolioSummary?.totalGainLossYTD !== undefined && (
-                                <div className={`text-sm mt-1 float-right ${portfolioSummary.totalGainLossYTD >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {portfolioSummary.totalGainLossYTD >= 0 ? '+' : ''}${Math.abs(portfolioSummary.totalGainLossYTD).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} YTD
+                        </div>
+
+                        <div className="text-right">
+                            <div className="text-sm text-muted mb-1">Current Balance</div>
+                            {isEditing ? (
+                                <div className="flex items-center space-x-2 justify-end">
+                                    <span className="text-2xl font-bold text-main">$</span>
+                                    <input
+                                        type="number"
+                                        value={editBalance}
+                                        onChange={(e) => setEditBalance(parseFloat(e.target.value))}
+                                        className="text-2xl font-bold bg-page border border-border rounded px-2 w-48 text-main text-right"
+                                    />
+                                    <div className="flex flex-col space-y-1">
+                                        <button onClick={handleUpdateBalance} className="bg-primary text-white px-2 py-1 rounded text-xs">Save</button>
+                                        <button onClick={() => setIsEditing(false)} className="text-muted text-xs hover:text-main">Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="group flex items-center space-x-12">
+                                    {/* Section 1: Balance (Legacy Edit logic maintained) */}
+                                    <div className="flex flex-col items-end">
+                                        <div className="text-sm text-muted mb-1">Current Balance</div>
+                                        <div className="flex items-center">
+                                            <div className="text-4xl font-bold text-main">
+                                                ${(isStockAccount ? holdings.reduce((sum, h) => sum + (h.currentValue || 0), 0) : account.balance)
+                                                    .toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
+                                            {account.isManual && (
+                                                <button onClick={() => { setEditBalance(account.balance); setIsEditing(true); }} className="ml-3 p-2 hover:bg-page rounded-full text-muted hover:text-primary transition-colors">
+                                                    <Edit2 className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Section 2: Day Change */}
+                                    {isStockAccount && (
+                                        <div className="flex flex-col items-end border-l border-border pl-12">
+                                            <div className="text-sm text-muted mb-1">Day Change</div>
+                                            <div className={`text-2xl font-medium ${totalDayChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {totalDayChange >= 0 ? '+' : ''}${Math.abs(totalDayChange).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <span className="text-lg ml-2">({totalDayChange >= 0 ? '+' : ''}{totalDayChangePercent.toFixed(2)}%)</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Section 3: YTD Return */}
+                                    {isStockAccount && portfolioSummary?.totalGainLossYTD !== undefined && (
+                                        <div className="flex flex-col items-end border-l border-border pl-12">
+                                            <div className="text-sm text-muted mb-1">YTD Return</div>
+                                            <div className={`text-2xl font-medium ${portfolioSummary.totalGainLossYTD >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {portfolioSummary.totalGainLossYTD >= 0 ? '+' : ''}${Math.abs(portfolioSummary.totalGainLossYTD).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
-                    )}
-                </div>
-            </div>
+                    </div>
 
-            {
-                isStockAccount ? (
-                    <>
-                        {/* Main Layout Grid - center content takes more space */}
-                        <div className="grid grid-cols-1 lg:grid-cols-[65fr_35fr] gap-6">
+                    {isStockAccount ? (
+                        <>
+                            {/* Tabs */}
+                            <div className="flex space-x-1 bg-card border border-border rounded-lg p-1 w-fit">
+                                <button
+                                    onClick={() => setActiveTab('holdings')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'holdings' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
+                                >
+                                    Holdings
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('transactions')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'transactions' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
+                                >
+                                    Transactions
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('performance')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'performance' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
+                                >
+                                    Performance
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('sandbox')}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'sandbox' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
+                                >
+                                    Sandbox
+                                </button>
+                            </div>
 
-                            {/* Left Column: Holdings & Transactions */}
-                            <div className="space-y-6">
-
-                                {/* Tabs */}
-                                <div className="flex space-x-1 bg-card border border-border rounded-lg p-1 w-fit">
-                                    <button
-                                        onClick={() => setActiveTab('holdings')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'holdings' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
-                                    >
-                                        Holdings
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('transactions')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'transactions' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
-                                    >
-                                        Transactions
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('performance')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'performance' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
-                                    >
-                                        Performance
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('sandbox')}
-                                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'sandbox' ? 'bg-primary text-white' : 'text-muted hover:text-main'}`}
-                                    >
-                                        Sandbox
-                                    </button>
-                                </div>
-
-                                {isLoading ? (
-                                    <LoadingSpinner />
-                                ) : (
-                                    <>
-                                        {activeTab === 'holdings' && (
-                                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                                {/* Holdings Table */}
-                                                <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-                                                    <table className="w-full text-left">
-                                                        <thead className="bg-muted/5">
-                                                            <tr className="border-b border-border text-xs uppercase text-muted">
-                                                                <th className="py-3 px-4">Symbol</th>
-                                                                <th className="py-3 px-4 text-right">Qty</th>
-                                                                <th className="py-3 px-4 text-right">Price</th>
-                                                                <th className="py-3 px-4 text-right">Value</th>
-                                                                <th className="py-3 px-4 text-right">Gain/Loss</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-border">
-                                                            {holdings.map((h) => (
-                                                                <tr
-                                                                    key={h.symbol}
-                                                                    onClick={() => setSelectedChartSymbol(h.symbol)}
-                                                                    className={`hover:bg-page/50 text-sm cursor-pointer transition-colors ${selectedChartSymbol === h.symbol ? 'bg-primary/10' : ''
-                                                                        }`}
-                                                                >
-                                                                    <td className="py-3 px-4 font-medium text-main">{h.symbol}</td>
-                                                                    <td className="py-3 px-4 text-right text-muted">{h.quantity.toLocaleString()}</td>
-                                                                    <td className="py-3 px-4 text-right text-main">${(h.currentPrice || 0).toFixed(2)}</td>
-                                                                    <td className="py-3 px-4 text-right font-medium text-main">${(h.currentValue || 0).toLocaleString()}</td>
-                                                                    <td className={`py-3 px-4 text-right ${(h.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                        {(h.totalGainLoss || 0) >= 0 ? '+' : ''}{(h.totalGainLossPercentage || 0).toFixed(2)}%
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-
-                                                {/* Stock Performance Chart - next to holdings */}
-                                                {holdings.length > 0 && (
-                                                    <StockPerformanceChart holdings={holdings} externalSymbol={selectedChartSymbol} />
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {activeTab === 'transactions' && (
+                            {isLoading ? (
+                                <LoadingSpinner />
+                            ) : (
+                                <>
+                                    {activeTab === 'holdings' && (
+                                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                            {/* Holdings Table */}
                                             <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
-                                                <div className="p-4 border-b border-border flex justify-between items-center bg-muted/5">
-                                                    <h3 className="text-sm font-semibold text-main">Transaction History</h3>
-                                                    <button
-                                                        onClick={() => setIsAddTxnOpen(true)}
-                                                        className="flex items-center space-x-1 text-xs bg-primary text-white px-3 py-1.5 rounded hover:bg-primary/90 transition-colors"
-                                                    >
-                                                        <Plus className="h-3 w-3" />
-                                                        <span>Add Transaction</span>
-                                                    </button>
-                                                </div>
                                                 <table className="w-full text-left">
                                                     <thead className="bg-muted/5">
                                                         <tr className="border-b border-border text-xs uppercase text-muted">
-                                                            <th className="py-3 px-4">Date</th>
                                                             <th className="py-3 px-4">Symbol</th>
-                                                            <th className="py-3 px-4">Type</th>
-                                                            <th className="py-3 px-4 text-right">Summary</th>
+                                                            <th className="py-3 px-4 text-right">Qty</th>
+                                                            <th className="py-3 px-4 text-right">Value</th>
+                                                            <th className="py-3 px-4 text-right">Current Price</th>
+                                                            <th className="py-3 px-4 text-right">Today's Change</th>
+                                                            <th className="py-3 px-4 text-right">Total Gain/Loss</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-border">
-                                                        {transactions.map((txn) => (
-                                                            <tr key={txn.id} className="hover:bg-page/50 text-sm">
-                                                                <td className="py-3 px-4 text-muted">{new Date(txn.transactionDate).toLocaleDateString()}</td>
-                                                                <td className="py-3 px-4 font-medium text-main">{txn.symbol}</td>
-                                                                <td className="py-3 px-4">
-                                                                    <span className={`text-xs font-bold px-2 py-1 rounded ${txn.type === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                                        }`}>
-                                                                        {txn.type}
+                                                        {holdings.map((h) => (
+                                                            <tr
+                                                                key={h.symbol}
+                                                                onClick={() => setSelectedChartSymbol(h.symbol)}
+                                                                className={`hover:bg-page/50 text-sm cursor-pointer transition-colors ${selectedChartSymbol === h.symbol ? 'bg-primary/10' : ''
+                                                                    }`}
+                                                            >
+                                                                <td className="py-3 px-4 font-medium text-main">{h.symbol}</td>
+                                                                <td className="py-3 px-4 text-right text-muted">{h.quantity.toLocaleString()}</td>
+                                                                <td className="py-3 px-4 text-right font-medium text-main">${(h.currentValue || 0).toLocaleString()}</td>
+                                                                <td className="py-3 px-4 text-right">
+                                                                    <span className="font-medium text-main">
+                                                                        ${(h.currentPrice || 0).toFixed(2)}
                                                                     </span>
                                                                 </td>
-                                                                <td className="py-3 px-4 text-right text-main">
-                                                                    {txn.type === 'BUY' ? 'Bought' : 'Sold'} {txn.quantity.toLocaleString()} @ ${txn.pricePerShare.toLocaleString()}
+                                                                <td className="py-3 px-4 text-right">
+                                                                    <div className="flex flex-col items-end">
+                                                                        <span className={`font-medium ${(h.dailyChange || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                            {(h.dailyChange || 0) * h.quantity >= 0 ? '+' : ''}${(Math.abs((h.dailyChange || 0) * h.quantity)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                        </span>
+                                                                        <span className={`text-xs ${(h.dailyChange || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                            ({(h.dailyChange || 0) >= 0 ? '+' : ''}{(h.dailyChangePercentage || 0).toFixed(2)}%)
+                                                                        </span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className={`py-3 px-4 text-right ${(h.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                    {(h.totalGainLoss || 0) >= 0 ? '+' : ''}{(h.totalGainLossPercentage || 0).toFixed(2)}%
                                                                 </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
                                             </div>
-                                        )}
 
-                                        {activeTab === 'performance' && (
-                                            <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
-                                                <div className="flex items-center justify-between mb-6">
-                                                    <h3 className="text-lg font-semibold text-main">Portfolio Value Over Time</h3>
-                                                    <TimeRangeSelector
-                                                        selectedPeriod={historyPeriod}
-                                                        onSelectPeriod={setHistoryPeriod}
-                                                    />
-                                                </div>
+                                            {/* Stock Performance Chart - next to holdings */}
+                                            {holdings.length > 0 && (
+                                                <StockPerformanceChart holdings={holdings} externalSymbol={selectedChartSymbol} />
+                                            )}
+                                        </div>
+                                    )}
 
-                                                <div className="h-[400px] w-full">
-                                                    <ResponsiveContainer width="100%" height="100%">
-                                                        <AreaChart
-                                                            data={historyData.filter(d => d.value > 0)}
-                                                            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                                                            onMouseMove={(e: any) => {
-                                                                if (e.activePayload && e.activePayload[0]) {
-                                                                    setActiveValue(e.activePayload[0].payload.value);
-                                                                }
+                                    {activeTab === 'transactions' && (
+                                        <div className="bg-card rounded-lg shadow-sm border border-border overflow-hidden">
+                                            <div className="p-4 border-b border-border flex justify-between items-center bg-muted/5">
+                                                <h3 className="text-sm font-semibold text-main">Transaction History</h3>
+                                                <button
+                                                    onClick={() => setIsAddTxnOpen(true)}
+                                                    className="flex items-center space-x-1 text-xs bg-primary text-white px-3 py-1.5 rounded hover:bg-primary/90 transition-colors"
+                                                >
+                                                    <Plus className="h-3 w-3" />
+                                                    <span>Add Transaction</span>
+                                                </button>
+                                            </div>
+                                            <table className="w-full text-left">
+                                                <thead className="bg-muted/5">
+                                                    <tr className="border-b border-border text-xs uppercase text-muted">
+                                                        <th className="py-3 px-4">Date</th>
+                                                        <th className="py-3 px-4">Symbol</th>
+                                                        <th className="py-3 px-4">Type</th>
+                                                        <th className="py-3 px-4 text-right">Summary</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border">
+                                                    {transactions.map((txn) => (
+                                                        <tr key={txn.id} className="hover:bg-page/50 text-sm">
+                                                            <td className="py-3 px-4 text-muted">{new Date(txn.transactionDate).toLocaleDateString()}</td>
+                                                            <td className="py-3 px-4 font-medium text-main">{txn.symbol}</td>
+                                                            <td className="py-3 px-4">
+                                                                <span className={`text-xs font-bold px-2 py-1 rounded ${txn.type === 'BUY' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                                    }`}>
+                                                                    {txn.type}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3 px-4 text-right text-main">
+                                                                {txn.type === 'BUY' ? 'Bought' : 'Sold'} {txn.quantity.toLocaleString()} @ ${txn.pricePerShare.toLocaleString()}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {activeTab === 'performance' && (
+                                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                                            <div className="flex items-center justify-between mb-6">
+                                                <h3 className="text-lg font-semibold text-main">Portfolio Value Over Time</h3>
+                                                <TimeRangeSelector
+                                                    selectedPeriod={historyPeriod}
+                                                    onSelectPeriod={setHistoryPeriod}
+                                                />
+                                            </div>
+
+                                            <div className="h-[400px] w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <AreaChart
+                                                        data={historyData.filter(d => d.value > 0)}
+                                                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                                                        onMouseMove={(e: any) => {
+                                                            if (e.activePayload && e.activePayload[0]) {
+                                                                setActiveValue(e.activePayload[0].payload.value);
+                                                            }
+                                                        }}
+                                                        onMouseLeave={() => setActiveValue(null)}
+                                                    >
+                                                        <defs>
+                                                            <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
+                                                        <XAxis
+                                                            dataKey="date"
+                                                            tickFormatter={(str) => {
+                                                                const [year, month, day] = str.split('-').map(Number);
+                                                                const date = new Date(year, month - 1, day);
+                                                                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: historyPeriod === 'ALL' || historyPeriod === '5Y' ? '2-digit' : undefined });
                                                             }}
-                                                            onMouseLeave={() => setActiveValue(null)}
-                                                        >
-                                                            <defs>
-                                                                <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                                                </linearGradient>
-                                                            </defs>
-                                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#374151" opacity={0.1} />
-                                                            <XAxis
-                                                                dataKey="date"
-                                                                tickFormatter={(str) => {
-                                                                    const [year, month, day] = str.split('-').map(Number);
-                                                                    const date = new Date(year, month - 1, day);
-                                                                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: historyPeriod === 'ALL' || historyPeriod === '5Y' ? '2-digit' : undefined });
-                                                                }}
+                                                            stroke="#9ca3af"
+                                                            fontSize={12}
+                                                            tickMargin={10}
+                                                            minTickGap={30}
+                                                        />
+                                                        <YAxis
+                                                            tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 })}`}
+                                                            stroke="#9ca3af"
+                                                            fontSize={12}
+                                                            domain={['dataMin', 'dataMax']}
+                                                        />
+                                                        <Tooltip
+                                                            contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                                                            itemStyle={{ color: '#e5e7eb' }}
+                                                            labelStyle={{ color: '#9ca3af', marginBottom: '0.25rem' }}
+                                                            formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
+                                                            labelFormatter={(label) => {
+                                                                const [year, month, day] = label.split('-').map(Number);
+                                                                return new Date(year, month - 1, day).toLocaleDateString('en-US', { dateStyle: 'full' });
+                                                            }}
+                                                        />
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey="value"
+                                                            stroke="#3b82f6"
+                                                            strokeWidth={2}
+                                                            fillOpacity={1}
+                                                            fill="url(#colorVal)"
+                                                            activeDot={{ r: 6, strokeWidth: 0 }}
+                                                        />
+                                                        {activeValue !== null && (
+                                                            <ReferenceLine
+                                                                y={activeValue}
                                                                 stroke="#9ca3af"
-                                                                fontSize={12}
-                                                                tickMargin={10}
-                                                                minTickGap={30}
+                                                                strokeDasharray="3 3"
+                                                                opacity={0.5}
                                                             />
-                                                            <YAxis
-                                                                tickFormatter={(value) => `$${value.toLocaleString('en-US', { notation: 'compact', maximumFractionDigits: 2 })}`}
-                                                                stroke="#9ca3af"
-                                                                fontSize={12}
-                                                                domain={['dataMin', 'dataMax']}
-                                                            />
-                                                            <Tooltip
-                                                                contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                                                                itemStyle={{ color: '#e5e7eb' }}
-                                                                labelStyle={{ color: '#9ca3af', marginBottom: '0.25rem' }}
-                                                                formatter={(value: number) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Portfolio Value']}
-                                                                labelFormatter={(label) => {
-                                                                    const [year, month, day] = label.split('-').map(Number);
-                                                                    return new Date(year, month - 1, day).toLocaleDateString('en-US', { dateStyle: 'full' });
-                                                                }}
-                                                            />
-                                                            <Area
-                                                                type="monotone"
-                                                                dataKey="value"
-                                                                stroke="#3b82f6"
-                                                                strokeWidth={2}
-                                                                fillOpacity={1}
-                                                                fill="url(#colorVal)"
-                                                                activeDot={{ r: 6, strokeWidth: 0 }}
-                                                            />
-                                                            {activeValue !== null && (
-                                                                <ReferenceLine
-                                                                    y={activeValue}
-                                                                    stroke="#9ca3af"
-                                                                    strokeDasharray="3 3"
-                                                                    opacity={0.5}
-                                                                />
-                                                            )}
-                                                        </AreaChart>
-                                                    </ResponsiveContainer>
-                                                </div>
+                                                        )}
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
 
-                                        {activeTab === 'sandbox' && (
-                                            <div className="bg-card rounded-lg p-8 text-center border border-border border-dashed">
-                                                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4">
-                                                    <Wallet className="w-6 h-6" />
-                                                </div>
-                                                <h3 className="text-lg font-medium text-main">Paper Trading Sandbox</h3>
-                                                <p className="text-muted mt-2 max-w-sm mx-auto">
-                                                    Simulate trades and test "what-if" scenarios without affecting your actual portfolio.
-                                                    <br /><span className="text-xs uppercase font-bold text-blue-500 mt-2 block">Coming Soon</span>
-                                                </p>
+                                    {activeTab === 'sandbox' && (
+                                        <div className="bg-card rounded-lg p-8 text-center border border-border border-dashed">
+                                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4">
+                                                <Wallet className="w-6 h-6" />
                                             </div>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-
-                            {/* Right Column: Market Indices, Watchlist & Quick Stats */}
-                            <div className="space-y-6">
-                                <MarketIndices />
-                                <WatchlistWidget />
-
-                                {/* Simplified Performance Card */}
-                                <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
-                                    <h3 className="font-semibold text-main mb-4 flex items-center">
-                                        <TrendingUp className="h-4 w-4 mr-2" />
-                                        Performance
-                                    </h3>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-muted">Day Change</span>
-                                            <span className="text-green-600 font-medium">+$0.00 (0.00%)</span>
+                                            <h3 className="text-lg font-medium text-main">Paper Trading Sandbox</h3>
+                                            <p className="text-muted mt-2 max-w-sm mx-auto">
+                                                Simulate trades and test "what-if" scenarios without affecting your actual portfolio.
+                                                <br /><span className="text-xs uppercase font-bold text-blue-500 mt-2 block">Coming Soon</span>
+                                            </p>
                                         </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-muted">Total Return</span>
-                                            <span className={`font-medium ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {totalGainLoss >= 0 ? '+' : ''}${totalGainLoss.toLocaleString()}
-                                            </span>
-                                        </div>
-                                    </div>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    ) : (
+                        /* Default/Manual Account View */
+                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border text-center py-12">
+                            <History className="h-12 w-12 text-muted mx-auto mb-4" />
+                            <h3 className="text-lg font-medium text-main">History Tracking</h3>
+                            <p className="text-muted mt-2">
+                                Historical balance tracking for {account.name} will appear here.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {isStockAccount && (
+                    <div className="space-y-6">
+                        <MarketIndices />
+                        <WatchlistWidget />
+
+                        {/* Simplified Performance Card */}
+                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                            <h3 className="font-semibold text-main mb-4 flex items-center">
+                                <TrendingUp className="h-4 w-4 mr-2" />
+                                Performance
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-muted">Total Return</span>
+                                    <span className={`font-medium ${totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {totalGainLoss >= 0 ? '+' : ''}${totalGainLoss.toLocaleString()}
+                                    </span>
                                 </div>
                             </div>
-
                         </div>
-                    </>
-                ) : (
-                    /* Default/Manual Account View */
-                    <div className="bg-card rounded-lg p-6 shadow-sm border border-border text-center py-12">
-                        <History className="h-12 w-12 text-muted mx-auto mb-4" />
-                        <h3 className="text-lg font-medium text-main">History Tracking</h3>
-                        <p className="text-muted mt-2">
-                            Historical balance tracking for {account.name} will appear here.
-                        </p>
                     </div>
-                )
-            }
+                )}
+            </div>
             {/* Add Transaction Modal */}
             {
                 isAddTxnOpen && (

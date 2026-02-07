@@ -88,6 +88,23 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  sports-service:
+    build:
+      context: ./sports-service
+      dockerfile: Dockerfile
+    container_name: sports_service
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./sports-service:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
