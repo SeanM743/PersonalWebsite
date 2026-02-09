@@ -38,6 +38,7 @@ public class BackendApplication {
         log.info("💬 Chat API: http://localhost:{}/api/chat", port);
         log.info("📅 Calendar API: http://localhost:{}/api/calendar", port);
         log.info("📝 Content API: http://localhost:{}/api/content", port);
+        log.info("📰 News API: http://localhost:{}/api/news", port);
         log.info("🔐 Auth API: http://localhost:{}/api/auth", port);
         log.info("✅ Application startup completed successfully!");
     }

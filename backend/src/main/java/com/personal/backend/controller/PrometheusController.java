@@ -70,6 +70,7 @@ public class PrometheusController {
                     "service_health_score", startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "service_health_score");
             response.put("data", timeSeries);
             response.put("start", startTime);
@@ -100,6 +101,7 @@ public class PrometheusController {
                     "throttling_rate", startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "throttling_rate");
             response.put("data", timeSeries);
             response.put("start", startTime);
@@ -135,6 +137,7 @@ public class PrometheusController {
                     query, startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "cache_hit_ratio");
             response.put("cacheName", cacheName);
             response.put("data", timeSeries);
@@ -173,6 +176,7 @@ public class PrometheusController {
                     query, startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "response_time");
             response.put("percentile", percentile);
             response.put("endpoint", endpoint);
@@ -210,6 +214,7 @@ public class PrometheusController {
                     query, startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "error_rate");
             response.put("endpoint", endpoint);
             response.put("data", timeSeries);
@@ -246,6 +251,7 @@ public class PrometheusController {
                     query, startTime, endTime, step);
             
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             response.put("metric", "request_rate");
             response.put("endpoint", endpoint);
             response.put("data", timeSeries);
@@ -268,6 +274,7 @@ public class PrometheusController {
     public ResponseEntity<Map<String, Object>> getDashboardData() {
         try {
             Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             
             // Current values
             response.put("healthScore", prometheusQueryService.getHealthScore());

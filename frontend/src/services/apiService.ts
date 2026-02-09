@@ -490,6 +490,41 @@ class ApiService {
       return { success: false, error };
     }
   }
+  // News API
+  async getNews() {
+    const response = await this.api.get('/news');
+    return response.data;
+  }
+
+  async getCategories() {
+    const response = await this.api.get('/news/categories');
+    return response.data;
+  }
+
+  async addNewsCategory(topic: string, query?: string, tab?: string) {
+    const response = await this.api.post('/news/categories', { topic, query, tab });
+    return response.data;
+  }
+
+  async deleteNewsCategory(id: number) {
+    const response = await this.api.delete(`/news/categories/${id}`);
+    return response.data;
+  }
+
+  async updateNewsCategory(id: number, topic: string, query?: string, tab?: string) {
+    const response = await this.api.put(`/news/categories/${id}`, { topic, query, tab });
+    return response.data;
+  }
+
+  async deleteNewsArticle(id: number) {
+    const response = await this.api.delete(`/news/articles/${id}`);
+    return response.data;
+  }
+
+  async refreshNews(force: boolean = false) {
+    const response = await this.api.post(`/news/refresh?force=${force}`);
+    return response.data;
+  }
 }
 
 // Sports Service API (Python/FastAPI on port 8000)

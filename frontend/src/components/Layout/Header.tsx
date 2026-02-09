@@ -12,6 +12,7 @@ const Header: React.FC = () => {
     { name: 'Finance', href: '/portfolio' },
     { name: 'Life', href: '/life-events' },
     { name: 'Calendar', href: '/calendar' },
+    { name: 'News', href: '/news' },
   ];
 
   return (

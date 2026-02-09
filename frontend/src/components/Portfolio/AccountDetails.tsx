@@ -57,7 +57,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const [isAddTxnOpen, setIsAddTxnOpen] = useState(false);
 
     // Use Portfolio Context for performance graph data
-    const { historyData, isHistoryLoading, loadHistory } = usePortfolio();
+    const { historyData, loadHistory } = usePortfolio();
     const [historyPeriod, setHistoryPeriod] = useState('1M');
 
     // Transaction Form State
@@ -76,39 +76,45 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
 
     const isStockAccount = account.type === 'STOCK_PORTFOLIO';
 
-    // Helper function to get last trading date formatted
-    const getLastTradingDateFormatted = () => {
+    // Helper to determine accurate "As of" message
+    const getUpdateStatusMessage = () => {
         const now = new Date();
-        const day = now.getDay(); // 0 = Sunday, 6 = Saturday
-        const hour = now.getHours();
 
-        let lastTradingDate = new Date();
 
-        if (day === 0) {
-            // Sunday - last trading day was Friday
-            lastTradingDate.setDate(now.getDate() - 2);
-        } else if (day === 6) {
-            // Saturday - last trading day was Friday
-            lastTradingDate.setDate(now.getDate() - 1);
-        } else if (day === 1 && hour < 9) {
-            // Monday before market open - last trading day was Friday
-            lastTradingDate.setDate(now.getDate() - 3);
-        } else if (hour < 9) {
-            // Weekday before market open - last trading day was yesterday
-            lastTradingDate.setDate(now.getDate() - 1);
-        } else if (hour >= 16) {
-            // After market close - today is last trading day
-            // lastTradingDate is already today
+        // Check if weekend (Sat/Sun)
+        const day = now.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short' });
+        const timeParts = now.toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: 'numeric', hour12: false }).split(':');
+        const hour = parseInt(timeParts[0]);
+        const minute = parseInt(timeParts[1]);
+        const timeVal = hour + (minute / 60);
+
+        const isWeekend = day === 'Sat' || day === 'Sun';
+        // Market Hours: 9:30 - 16:00 ET Mon-Fri
+        const isMarketHours = !isWeekend && timeVal >= 9.5 && timeVal < 16.0;
+
+        if (isMarketHours) {
+            return `Real-time Market Data (As of ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
         } else {
-            // During market hours - use yesterday as the last confirmed close
-            lastTradingDate.setDate(now.getDate() - 1);
-        }
+            // If closed, explain why
+            let reason = "Market Closed";
+            if (isWeekend) reason = "Market Closed (Weekend)";
+            else if (timeVal >= 16.0) reason = "Market Closed (After Hours)";
+            else if (timeVal < 9.5) reason = "Pre-Market";
 
-        return lastTradingDate.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric'
-        });
+            // Calculate last close date roughly for display
+            const closeDate = new Date(now);
+            if (isWeekend) {
+                const dayNum = now.getDay(); // 0Sun, 6Sat
+                closeDate.setDate(now.getDate() - (dayNum === 0 ? 2 : 1));
+            } else if (timeVal < 9.5) {
+                // If Monday morning, go back to Friday. Else yesterday.
+                const dayNum = now.getDay();
+                closeDate.setDate(now.getDate() - (dayNum === 1 ? 3 : 1));
+            }
+            // else today is the close date (after 4pm)
+
+            return `${reason} - Data as of ${closeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        }
     };
 
     useEffect(() => {
@@ -219,7 +225,7 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                             <h1 className="text-3xl font-bold text-main">{account.name}</h1>
                             <div className="text-sm text-muted mt-1">
                                 {isStockAccount ? (
-                                    `Updated as of ${getLastTradingDateFormatted()} (Market Close)`
+                                    getUpdateStatusMessage()
                                 ) : (
                                     `Last updated: ${account.updatedAt ? new Date(account.updatedAt).toLocaleDateString() : 'Never'}`
                                 )}
@@ -369,10 +375,16 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                                                 </table>
                                             </div>
 
-                                            {/* Stock Performance Chart - next to holdings */}
-                                            {holdings.length > 0 && (
-                                                <StockPerformanceChart holdings={holdings} externalSymbol={selectedChartSymbol} />
-                                            )}
+                                            {/* Right Column: Market Indices + Stock Performance Chart */}
+                                            <div className="flex flex-col gap-4">
+                                                <MarketIndices />
+
+                                                {holdings.length > 0 && (
+                                                    <div className="flex-1">
+                                                        <StockPerformanceChart holdings={holdings} externalSymbol={selectedChartSymbol} />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
@@ -527,7 +539,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
 
                 {isStockAccount && (
                     <div className="space-y-6">
-                        <MarketIndices />
                         <WatchlistWidget />
 
                         {/* Simplified Performance Card */}

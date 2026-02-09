@@ -13,7 +13,11 @@ import Calendar from './pages/Calendar';
 import Content from './pages/Content';
 import Chat from './pages/Chat';
 import LifeEvents from './pages/LifeEvents';
+import NewsPage from './pages/NewsPage';
+import NewsSettings from './pages/NewsSettings';
+
 import LoadingSpinner from './components/UI/LoadingSpinner';
+import { apiService } from './services/apiService';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -30,6 +34,14 @@ const AppContent: React.FC = () => {
     return <LoginPage />;
   }
 
+  // Pre-fetch/Check news in background when app loads
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      // Smart refresh (only if stale)
+      apiService.refreshNews(false).catch(console.error);
+    }
+  }, [isAuthenticated]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -43,6 +55,9 @@ const AppContent: React.FC = () => {
           <Route path="/content" element={<Content />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/life-events" element={<LifeEvents />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/news/settings" element={<NewsSettings />} />
+
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>

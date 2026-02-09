@@ -14,8 +14,11 @@ import reactor.core.publisher.Mono;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -202,6 +205,12 @@ public class MarketDataScheduler {
      * Get symbols that need market data updates
      */
     private List<String> getSymbolsNeedingUpdate() {
+        // Stop all updates on weekends to prevent API calls
+        if (isWeekend()) {
+            log.debug("Market is closed (weekend), skipping market data updates");
+            return java.util.Collections.emptyList();
+        }
+
         // Get all active symbols (symbols with recent activity)
         LocalDateTime recentCutoff = LocalDateTime.now().minusDays(7);
         List<String> activeSymbols = stockRepository.findActiveSymbols(recentCutoff);
@@ -221,6 +230,12 @@ public class MarketDataScheduler {
                 .distinct()
                 .limit(100) // Limit to prevent excessive API usage
                 .toList();
+    }
+
+    private boolean isWeekend() {
+        ZonedDateTime nowET = ZonedDateTime.now(ZoneId.of("America/New_York"));
+        DayOfWeek day = nowET.getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
     
     /**

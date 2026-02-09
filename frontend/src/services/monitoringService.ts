@@ -71,7 +71,7 @@ class MonitoringService {
   subscribeToHealth(callback: (data: any) => void): () => void {
     if (!this.stompClient?.connected) {
       console.warn('WebSocket not connected');
-      return () => {};
+      return () => { };
     }
 
     const subscription = this.stompClient.subscribe('/topic/health', (message: Message) => {
@@ -91,7 +91,7 @@ class MonitoringService {
   subscribeToThrottling(callback: (data: any) => void): () => void {
     if (!this.stompClient?.connected) {
       console.warn('WebSocket not connected');
-      return () => {};
+      return () => { };
     }
 
     const subscription = this.stompClient.subscribe('/topic/throttling', (message: Message) => {
@@ -111,7 +111,7 @@ class MonitoringService {
   subscribeToCache(callback: (data: any) => void): () => void {
     if (!this.stompClient?.connected) {
       console.warn('WebSocket not connected');
-      return () => {};
+      return () => { };
     }
 
     const subscription = this.stompClient.subscribe('/topic/cache', (message: Message) => {
@@ -131,7 +131,7 @@ class MonitoringService {
   subscribeToMetricsSummary(callback: (data: any) => void): () => void {
     if (!this.stompClient?.connected) {
       console.warn('WebSocket not connected');
-      return () => {};
+      return () => { };
     }
 
     const subscription = this.stompClient.subscribe('/topic/metrics-summary', (message: Message) => {
@@ -151,7 +151,7 @@ class MonitoringService {
   subscribeToAlerts(callback: (data: any) => void): () => void {
     if (!this.stompClient?.connected) {
       console.warn('WebSocket not connected');
-      return () => {};
+      return () => { };
     }
 
     const subscription = this.stompClient.subscribe('/topic/alerts', (message: Message) => {
@@ -235,43 +235,55 @@ class MonitoringService {
   }
 
   async getHealthScoreTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/health-score', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }
 
   async getThrottlingRateTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/throttling-rate', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }
 
   async getCacheHitRatioTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/cache-hit-ratio', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }
 
   async getResponseTimeTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/response-time', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }
 
   async getErrorRateTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/error-rate', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }
 
   async getRequestRateTimeSeries(hours: number = 24) {
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (hours * 3600);
     const response = await this.api.get('/prometheus/metrics/request-rate', {
-      params: { hours }
+      params: { start, end }
     });
     return response.data;
   }

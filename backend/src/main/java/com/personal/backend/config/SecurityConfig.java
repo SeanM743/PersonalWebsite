@@ -64,6 +64,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/portfolio/market-indices").permitAll()
                 // Recalculation endpoint - allow for manual fix
                 .requestMatchers("/api/portfolio/recalculate").permitAll()
+                // Allow manual news refresh
+                .requestMatchers("/api/news/refresh").permitAll()
                 // WebSocket endpoints
                 .requestMatchers("/ws/**").permitAll()
                 // Monitoring endpoints - allow public read access to health/metrics
@@ -74,6 +76,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/monitoring/**").authenticated()
                 // Content endpoints - allow guest access for now, will be refined later
                 .requestMatchers("/api/content/**").permitAll()
+                // News endpoints - require authentication
+                .requestMatchers("/api/news/**").authenticated()
                 // Signals endpoints (Bears, Family Pulse) - allow public access for dashboard
                 .requestMatchers("/api/signals/**").permitAll()
                 // Chat endpoints - allow guest access for dashboard chat

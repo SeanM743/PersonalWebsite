@@ -4,9 +4,20 @@
 
 echo "🚀 Setting up Personal Dashboard environment variables..."
 
-# Finnhub API Key (already configured)
-export FINNHUB_API_KEY="d56snvhr01qkvkasbedgd56snvhr01qkvkasbee0"
-echo "✅ Finnhub API key configured"
+# Load environment variables from .env if it exists
+if [ -f .env ]; then
+  echo "📄 Loading variables from .env..."
+  set -a
+  source .env
+  set +a
+  echo "✅ Loaded .env variables"
+fi
+
+# Finnhub API Key (fallback if not in .env)
+if [ -z "$FINNHUB_API_KEY" ]; then
+    export FINNHUB_API_KEY="d56snvhr01qkvkasbedgd56snvhr01qkvkasbee0"
+    echo "Using default Finnhub API Key"
+fi
 
 # Google Calendar credentials path
 export GOOGLE_CALENDAR_CREDENTIALS_PATH="C:/Users/seanm/.config/google/google-calendar-credentials.json"
