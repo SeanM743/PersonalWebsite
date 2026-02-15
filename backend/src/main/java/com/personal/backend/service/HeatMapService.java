@@ -220,4 +220,55 @@ public class HeatMapService {
 
         return cachedHeatMap;
     }
+
+    /**
+     * Build heat map data for a custom list of symbols (e.g. user portfolio or watchlist).
+     * Groups all stocks under a single sector with equal weighting.
+     */
+    public HeatMapDTO getCustomHeatMapData(List<String> symbols) {
+        if (symbols == null || symbols.isEmpty()) {
+            return HeatMapDTO.builder().sectors(List.of()).build();
+        }
+
+        log.info("Fetching custom heat map data for {} symbols", symbols.size());
+
+        Map<String, MarketData> marketDataMap = yahooFinanceService.getBatchMarketData(symbols);
+
+        List<HeatMapStock> stocks = new ArrayList<>();
+        for (String symbol : symbols) {
+            MarketData md = marketDataMap.get(symbol.toUpperCase());
+            String name = symbol;
+            BigDecimal changePercent = BigDecimal.ZERO;
+            BigDecimal price = BigDecimal.ZERO;
+
+            if (md != null) {
+                if (md.getCompanyName() != null && !md.getCompanyName().isBlank()) {
+                    name = md.getCompanyName();
+                }
+                if (md.getDailyChangePercentage() != null) {
+                    changePercent = md.getDailyChangePercentage();
+                } else if (md.calculateDailyChangePercentage() != null) {
+                    changePercent = md.calculateDailyChangePercentage();
+                }
+                if (md.getCurrentPrice() != null) {
+                    price = md.getCurrentPrice();
+                }
+            }
+
+            stocks.add(HeatMapStock.builder()
+                    .symbol(symbol.toUpperCase())
+                    .name(name)
+                    .price(price)
+                    .changePercent(changePercent)
+                    .weight(100) // equal weighting
+                    .build());
+        }
+
+        HeatMapSector sector = HeatMapSector.builder()
+                .name("Custom")
+                .stocks(stocks)
+                .build();
+
+        return HeatMapDTO.builder().sectors(List.of(sector)).build();
+    }
 }

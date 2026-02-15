@@ -129,8 +129,9 @@ const MarketHeatMap: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedSector, setSelectedSector] = useState<string>('all');
+    const [viewMode, setViewMode] = useState<'market' | 'portfolio' | 'watchlist'>('market');
 
-    const loadHeatMapData = useCallback(async () => {
+    const loadMarketHeatMap = useCallback(async () => {
         try {
             setLoading(true);
             const data = await apiService.getMarketHeatMap() as HeatMapData;
@@ -144,9 +145,45 @@ const MarketHeatMap: React.FC = () => {
         }
     }, []);
 
+    const loadCustomHeatMap = useCallback(async (mode: 'portfolio' | 'watchlist') => {
+        try {
+            setLoading(true);
+            let symbols: string[] = [];
+
+            if (mode === 'portfolio') {
+                const holdings = await apiService.getHoldings() as any[];
+                symbols = holdings.map((h: any) => h.symbol);
+            } else {
+                const watchlist = await apiService.getWatchlist() as any[];
+                symbols = watchlist.map((w: any) => w.symbol);
+            }
+
+            if (symbols.length === 0) {
+                setHeatMapData({ sectors: [] });
+                setError(mode === 'portfolio' ? 'No holdings in your portfolio' : 'Your watchlist is empty');
+                setLoading(false);
+                return;
+            }
+
+            const data = await apiService.getCustomHeatMap(symbols) as HeatMapData;
+            setHeatMapData(data);
+            setError(null);
+        } catch (err: any) {
+            console.error('Failed to load custom heat map:', err);
+            setError('Failed to load heat map data');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
-        loadHeatMapData();
-    }, [loadHeatMapData]);
+        if (viewMode === 'market') {
+            loadMarketHeatMap();
+        } else {
+            loadCustomHeatMap(viewMode);
+        }
+        setSelectedSector('all');
+    }, [viewMode, loadMarketHeatMap, loadCustomHeatMap]);
 
     if (loading) {
         return (
@@ -189,24 +226,41 @@ const MarketHeatMap: React.FC = () => {
 
     const allSectors = heatMapData.sectors.map(s => s.name);
 
+    const subtitle = viewMode === 'market'
+        ? 'S&P 500 top stocks • sized by market cap • colored by daily change'
+        : viewMode === 'portfolio'
+            ? 'Your portfolio holdings • equal weight • colored by daily change'
+            : 'Your watchlist • equal weight • colored by daily change';
+
     return (
         <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
             <div className="flex items-center justify-between mb-4">
                 <div>
                     <h3 className="text-lg font-semibold text-main">Market Heat Map</h3>
-                    <p className="text-sm text-muted">S&P 500 top stocks • sized by market cap • colored by daily change</p>
+                    <p className="text-sm text-muted">{subtitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <select
-                        value={selectedSector}
-                        onChange={(e) => setSelectedSector(e.target.value)}
+                        value={viewMode}
+                        onChange={(e) => setViewMode(e.target.value as any)}
                         className="text-xs bg-page border border-border text-main rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
                     >
-                        <option value="all">All Sectors</option>
-                        {allSectors.map(s => (
-                            <option key={s} value={s}>{s}</option>
-                        ))}
+                        <option value="market">S&P 500</option>
+                        <option value="portfolio">My Portfolio</option>
+                        <option value="watchlist">My Watchlist</option>
                     </select>
+                    {viewMode === 'market' && (
+                        <select
+                            value={selectedSector}
+                            onChange={(e) => setSelectedSector(e.target.value)}
+                            className="text-xs bg-page border border-border text-main rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                        >
+                            <option value="all">All Sectors</option>
+                            {allSectors.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                            ))}
+                        </select>
+                    )}
                 </div>
             </div>
 
