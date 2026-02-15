@@ -222,21 +222,34 @@ public class HeatMapService {
     }
 
     /**
-     * Build heat map data for a custom list of symbols (e.g. user portfolio or watchlist).
-     * Groups all stocks under a single sector with equal weighting.
+     * Build heat map data for a custom list of symbols with optional weights.
+     * Each entry: { "symbol": "AAPL", "weight": 5000 }
+     * Weight represents market value (portfolio) or equal weight (watchlist).
      */
-    public HeatMapDTO getCustomHeatMapData(List<String> symbols) {
-        if (symbols == null || symbols.isEmpty()) {
+    public HeatMapDTO getCustomHeatMapData(List<Map<String, Object>> entries) {
+        if (entries == null || entries.isEmpty()) {
             return HeatMapDTO.builder().sectors(List.of()).build();
         }
 
-        log.info("Fetching custom heat map data for {} symbols", symbols.size());
+        log.info("Fetching custom heat map data for {} entries", entries.size());
+
+        List<String> symbols = entries.stream()
+                .map(e -> String.valueOf(e.get("symbol")).toUpperCase())
+                .collect(Collectors.toList());
 
         Map<String, MarketData> marketDataMap = yahooFinanceService.getBatchMarketData(symbols);
 
         List<HeatMapStock> stocks = new ArrayList<>();
-        for (String symbol : symbols) {
-            MarketData md = marketDataMap.get(symbol.toUpperCase());
+        for (Map<String, Object> entry : entries) {
+            String symbol = String.valueOf(entry.get("symbol")).toUpperCase();
+            long weight = 100; // default equal weight
+            if (entry.get("weight") != null) {
+                try {
+                    weight = Math.max(1, Math.round(Double.parseDouble(String.valueOf(entry.get("weight")))));
+                } catch (NumberFormatException ignored) {}
+            }
+
+            MarketData md = marketDataMap.get(symbol);
             String name = symbol;
             BigDecimal changePercent = BigDecimal.ZERO;
             BigDecimal price = BigDecimal.ZERO;
@@ -256,11 +269,11 @@ public class HeatMapService {
             }
 
             stocks.add(HeatMapStock.builder()
-                    .symbol(symbol.toUpperCase())
+                    .symbol(symbol)
                     .name(name)
                     .price(price)
                     .changePercent(changePercent)
-                    .weight(100) // equal weighting
+                    .weight(weight)
                     .build());
         }
 

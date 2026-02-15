@@ -21,8 +21,8 @@ public class HeatMapController {
         return ResponseEntity.ok(heatMapService.getHeatMapData());
     }
 
-    @GetMapping("/heatmap/custom")
-    public ResponseEntity<HeatMapDTO> getCustomHeatMapData(@RequestParam List<String> symbols) {
-        return ResponseEntity.ok(heatMapService.getCustomHeatMapData(symbols));
+    @PostMapping("/heatmap/custom")
+    public ResponseEntity<HeatMapDTO> getCustomHeatMapData(@RequestBody List<java.util.Map<String, Object>> entries) {
+        return ResponseEntity.ok(heatMapService.getCustomHeatMapData(entries));
     }
 }

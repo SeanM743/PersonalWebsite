@@ -148,26 +148,30 @@ const MarketHeatMap: React.FC = () => {
     const loadCustomHeatMap = useCallback(async (mode: 'portfolio' | 'watchlist') => {
         try {
             setLoading(true);
-            let symbols: string[] = [];
+            let entries: { symbol: string; weight?: number }[] = [];
 
             if (mode === 'portfolio') {
                 const response = await apiService.getHoldings() as any;
                 const holdings = response?.data || response;
-                symbols = (Array.isArray(holdings) ? holdings : []).map((h: any) => h.symbol);
+                const holdingsArr = Array.isArray(holdings) ? holdings : [];
+                entries = holdingsArr.map((h: any) => ({
+                    symbol: h.symbol,
+                    weight: Math.abs(h.marketValue || h.currentValue || 100)
+                }));
             } else {
                 const response = await apiService.getWatchlist() as any;
                 const watchlist = Array.isArray(response) ? response : (response?.data || []);
-                symbols = watchlist.map((w: any) => w.symbol);
+                entries = watchlist.map((w: any) => ({ symbol: w.symbol }));
             }
 
-            if (symbols.length === 0) {
+            if (entries.length === 0) {
                 setHeatMapData({ sectors: [] });
                 setError(mode === 'portfolio' ? 'No holdings in your portfolio' : 'Your watchlist is empty');
                 setLoading(false);
                 return;
             }
 
-            const data = await apiService.getCustomHeatMap(symbols) as HeatMapData;
+            const data = await apiService.getCustomHeatMap(entries) as HeatMapData;
             setHeatMapData(data);
             setError(null);
         } catch (err: any) {

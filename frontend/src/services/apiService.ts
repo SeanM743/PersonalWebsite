@@ -185,8 +185,8 @@ class ApiService {
     return this.cachedGet('/market/heatmap', cacheKey, 15 * 60 * 1000); // 15 minutes
   }
 
-  async getCustomHeatMap(symbols: string[]) {
-    const response = await this.api.get('/market/heatmap/custom', { params: { symbols: symbols.join(',') } });
+  async getCustomHeatMap(entries: { symbol: string; weight?: number }[]) {
+    const response = await this.api.post('/market/heatmap/custom', entries);
     return response.data;
   }
 
