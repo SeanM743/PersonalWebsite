@@ -48,6 +48,8 @@ public class PortfolioService {
     private final MarketDataScheduler marketDataScheduler;
     private final AccountRepository accountRepository;
     private final AccountBalanceHistoryRepository accountBalanceHistoryRepository;
+    private final com.personal.backend.repository.AccountTransactionRepository accountTransactionRepository;
+    private final com.personal.backend.repository.StockTransactionRepository stockTransactionRepository;
     private final HistoricalPortfolioService historicalPortfolioService;
     private final StockPriceCacheService stockPriceCacheService;
     
@@ -60,9 +62,6 @@ public class PortfolioService {
     @Value("${portfolio.enable.real.time.updates:true}")
     private boolean enableRealTimeUpdates;
     
-    /**
-     * Get complete portfolio summary with real-time market data
-     */
     /**
      * Get complete portfolio summary with real-time market data
      */
@@ -102,35 +101,51 @@ public class PortfolioService {
             PerformanceCalculator.PerformanceMetrics metrics = performanceCalculator.calculatePerformanceMetrics(holdings, marketDataMap);
             List<StockPerformance> stockPerformances = performanceCalculator.calculateBatchPerformance(holdings, marketDataMap);
             
-            // Calculate Stock Portfolio YTD Performance
+            // Calculate Stock Portfolio Performance for various periods
             BigDecimal stockYtdGain = null;
             BigDecimal stockYtdGainPct = null;
+            BigDecimal stockGain7d = null;
+            BigDecimal stockGainPct7d = null;
+            BigDecimal stockGain1m = null;
+            BigDecimal stockGainPct1m = null;
+            BigDecimal stockGain3m = null;
+            BigDecimal stockGainPct3m = null;
             
             try {
                 List<Account> stockAccounts = accountRepository.findByType(Account.AccountType.STOCK_PORTFOLIO);
                 if (!stockAccounts.isEmpty()) {
                     Long stockAccountId = stockAccounts.get(0).getId();
-                    LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
+                    BigDecimal currentTotalValue = metrics.currentValue();
                     LocalDate today = LocalDate.now();
                     
-                    List<AccountBalanceHistory> history = accountBalanceHistoryRepository
-                            .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccountId, startOfYear, today);
+                    // Calculate Returns for different periods
                     
-                    AccountBalanceHistory baseline = history.stream()
-                            .filter(h -> h.getBalance().compareTo(BigDecimal.ZERO) > 0)
-                            .findFirst()
-                            .orElse(null);
+                    // YTD
+                    LocalDate startOfYear = LocalDate.of(today.getYear(), 1, 1);
+                    PeriodReturn ytdReturn = calculatePeriodReturn(userId, stockAccountId, startOfYear, today, currentTotalValue);
+                    stockYtdGain = ytdReturn.gainLoss();
+                    stockYtdGainPct = ytdReturn.percentage();
                     
-                    if (baseline != null) {
-                        BigDecimal startVal = baseline.getBalance();
-                        stockYtdGain = metrics.currentValue().subtract(startVal);
-                        if (startVal.compareTo(BigDecimal.ZERO) > 0) {
-                             stockYtdGainPct = stockYtdGain.divide(startVal, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
-                        }
-                    }
+                    // 7 Days
+                    LocalDate start7d = today.minusDays(7);
+                    PeriodReturn return7d = calculatePeriodReturn(userId, stockAccountId, start7d, today, currentTotalValue);
+                    stockGain7d = return7d.gainLoss();
+                    stockGainPct7d = return7d.percentage();
+                    
+                    // 1 Month
+                    LocalDate start1m = today.minusMonths(1);
+                    PeriodReturn return1m = calculatePeriodReturn(userId, stockAccountId, start1m, today, currentTotalValue);
+                    stockGain1m = return1m.gainLoss();
+                    stockGainPct1m = return1m.percentage();
+                    
+                    // 3 Months
+                    LocalDate start3m = today.minusMonths(3);
+                    PeriodReturn return3m = calculatePeriodReturn(userId, stockAccountId, start3m, today, currentTotalValue);
+                    stockGain3m = return3m.gainLoss();
+                    stockGainPct3m = return3m.percentage();
                 }
             } catch (Exception e) {
-                log.warn("Failed to calculate Stock YTD: {}", e.getMessage());
+                log.warn("Failed to calculate Stock Period Returns: {}", e.getMessage());
             }
 
             // Build portfolio summary
@@ -144,6 +159,12 @@ public class PortfolioService {
                     .dailyChangePercentage(metrics.dailyChangePercentage())
                     .totalGainLossYTD(stockYtdGain)
                     .totalGainLossPercentageYTD(stockYtdGainPct)
+                    .totalGainLoss7d(stockGain7d)
+                    .totalGainLossPercentage7d(stockGainPct7d)
+                    .totalGainLoss1m(stockGain1m)
+                    .totalGainLossPercentage1m(stockGainPct1m)
+                    .totalGainLoss3m(stockGain3m)
+                    .totalGainLossPercentage3m(stockGainPct3m)
                     .totalPositions(metrics.totalPositions())
                     .positionsWithCurrentData(metrics.positionsWithData())
                     .stockPerformances(stockPerformances)
@@ -274,37 +295,57 @@ public class PortfolioService {
             
             BigDecimal totalPortfolioValue = stockLiveValue.add(totalStaticValue);
             
+
             // Calculate YTD Performance
             LocalDate startOfYear = LocalDate.of(LocalDate.now().getYear(), 1, 1);
             LocalDate today = LocalDate.now();
             
-            // Get all history for this year to find the earliest starting point for each account
-            List<AccountBalanceHistory> yearHistory = accountBalanceHistoryRepository
+            // 5a. Get history for all accounts in the YTD range
+            List<AccountBalanceHistory> allHistory = accountBalanceHistoryRepository
                     .findByDateBetweenOrderByDateAsc(startOfYear, today);
             
-            // Group by account and find the earliest NON-ZERO record for each
-            Map<Long, AccountBalanceHistory> earliestBalances = yearHistory.stream()
-                    .filter(h -> h.getBalance().compareTo(BigDecimal.ZERO) > 0)
-                    .collect(Collectors.toMap(
-                            AccountBalanceHistory::getAccountId,
-                            h -> h,
-                            (existing, replacement) -> existing.getDate().isBefore(replacement.getDate()) ? existing : replacement
-                    ));
+            // 5b. Group by date and sum to get Total Portfolio Value for each day
+            // Also need to track WHICH accounts contributed to each day to ensure completeness
+            Map<LocalDate, List<AccountBalanceHistory>> historyByDate = allHistory.stream()
+                    .collect(Collectors.groupingBy(AccountBalanceHistory::getDate));
             
-            // Log debugging info
-            log.info("YTD Debug: Found history records: {}", yearHistory.size());
-            earliestBalances.forEach((id, h) -> log.info("YTD Debug: Account {} Earliest: {} Value: {}", id, h.getDate(), h.getBalance()));
+            // Check if we have active stock accounts
+            boolean hasStockAccount = stockAccount != null;
+            Long stockAccountId = hasStockAccount ? stockAccount.getId() : null;
+
+            // 5c. Find the first day where Total Value > 0 AND (if stock account exists, it is present)
+            BigDecimal startOfYearValue = historyByDate.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .filter(entry -> {
+                        // Check if total > 0
+                        BigDecimal dailyTotal = entry.getValue().stream()
+                                .map(AccountBalanceHistory::getBalance)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        
+                        if (dailyTotal.compareTo(BigDecimal.ZERO) <= 0) return false;
+                        
+                        // Check completeness: If we have a stock account, is it in this day's history?
+                        if (hasStockAccount) {
+                             boolean stockPresent = entry.getValue().stream()
+                                     .anyMatch(h -> h.getAccountId().equals(stockAccountId));
+                             if (!stockPresent) {
+                                 // Skip this day (likely holiday/weekend where only cash was recorded)
+                                 return false;
+                             }
+                        }
+                        return true;
+                    })
+                    .map(entry -> entry.getValue().stream()
+                            .map(AccountBalanceHistory::getBalance)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add))
+                    .findFirst()
+                    .orElse(BigDecimal.ZERO);
             
-            BigDecimal startOfYearValue = earliestBalances.values().stream()
-                    .map(AccountBalanceHistory::getBalance)
-                    // consistency check: filter out zero balances if appropriate? For now just log.
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            
-            log.info("YTD Debug: StartValue: {}, CurrentValue: {}", startOfYearValue, totalPortfolioValue);
+            log.info("YTD Calculation: StartValue (Aggregated & Complete)={}, CurrentValue={}", startOfYearValue, totalPortfolioValue);
             
             BigDecimal ytdGainLoss = totalPortfolioValue.subtract(startOfYearValue);
-            // If start value is 0 (new account), gain is raw amount, but percentage is not well defined (100%?) 
-            // We'll calculate percentage on start value if > 0, else 0.
+            
+            // Calculate percentage on start value if > 0, else 0
             BigDecimal ytdGainPercentage = startOfYearValue.compareTo(BigDecimal.ZERO) > 0
                     ? ytdGainLoss.divide(startOfYearValue, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100))
                     : BigDecimal.ZERO;
@@ -710,5 +751,77 @@ public class PortfolioService {
             log.error("Error fetching stock chart data for {}: {}", symbol, e.getMessage(), e);
             return List.of();
         }
+    }
+
+
+    private record PeriodReturn(BigDecimal gainLoss, BigDecimal percentage) {}
+    
+    /**
+     * Helper to calculate return for a specific period using Net Investment Logic
+     * Formula: Gain = (Current - Start) - NetFlows
+     *          Pct  = Gain / (Start + NetFlows)
+     */
+    private PeriodReturn calculatePeriodReturn(Long userId, Long stockAccountId, LocalDate startDate, LocalDate endDate, BigDecimal currentValue) {
+        BigDecimal gainLoss = null;
+        BigDecimal percentage = null;
+        
+        try {
+            // 1. Find Baseline (Start Value)
+            // We search for history records between startDate and endDate
+            // The baseline is the first record in this range with value > 0
+            List<AccountBalanceHistory> history = accountBalanceHistoryRepository
+                    .findByAccountIdAndDateBetweenOrderByDateAsc(stockAccountId, startDate, endDate);
+            
+            AccountBalanceHistory baseline = history.stream()
+                    .filter(h -> h.getBalance().compareTo(BigDecimal.ZERO) > 0)
+                    .findFirst()
+                    .orElse(null);
+            
+            if (baseline != null) {
+                BigDecimal startVal = baseline.getBalance();
+                // If baseline date is after start date, we use that date for transaction filtering too?
+                // Ideally yes, but using the requested window is safer to capture all relevant flows if data is sparse.
+                // However, logically "Net Investment" only matters *after* the baseline is established.
+                // Let's use the actual baseline date as the start of the flow calculation window to be precise.
+                LocalDate flowStartDate = baseline.getDate();
+                
+                // 2. Calculate Net Flows (Buys - Sells)
+                List<com.personal.backend.model.StockTransaction> transactions = stockTransactionRepository
+                        .findByUserIdAndTransactionDateBetween(userId, flowStartDate, endDate);
+                
+                BigDecimal totalBuys = BigDecimal.ZERO;
+                BigDecimal totalSells = BigDecimal.ZERO;
+                
+                for (com.personal.backend.model.StockTransaction txn : transactions) {
+                    BigDecimal amount = txn.getTotalCost();
+                    if (amount == null) {
+                        amount = txn.getQuantity().multiply(txn.getPricePerShare());
+                    }
+                    
+                    if (txn.getType() == com.personal.backend.model.StockTransaction.TransactionType.BUY) {
+                        totalBuys = totalBuys.add(amount);
+                    } else if (txn.getType() == com.personal.backend.model.StockTransaction.TransactionType.SELL) {
+                        totalSells = totalSells.add(amount);
+                    }
+                }
+                
+                BigDecimal netFlow = totalBuys.subtract(totalSells);
+                
+                // 3. Calculate Gain and Percentage
+                // Adjusted Gain = (Current - Start) - NetFlow
+                gainLoss = currentValue.subtract(startVal).subtract(netFlow);
+                
+                // Adjusted Baseline = Start + NetFlow
+                BigDecimal adjustedBaseline = startVal.add(netFlow);
+                
+                if (adjustedBaseline.compareTo(BigDecimal.ZERO) > 0) {
+                     percentage = gainLoss.divide(adjustedBaseline, 4, java.math.RoundingMode.HALF_UP).multiply(BigDecimal.valueOf(100));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error calculating return for period {} to {}: {}", startDate, endDate, e.getMessage());
+        }
+        
+        return new PeriodReturn(gainLoss, percentage);
     }
 }

@@ -57,6 +57,10 @@ public class StockTransaction {
     @Column(precision = 19, scale = 4)
     private BigDecimal totalCost;
 
+    // Optional: which account to debit/credit (null = default "Fidelity Cash")
+    @Column
+    private Long accountId;
+
     @Column(length = 500)
     private String notes;
 

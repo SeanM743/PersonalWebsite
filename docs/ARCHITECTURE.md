@@ -138,7 +138,7 @@ frontend/src/
 ### 2. Controller Layer (API)
 
 ```
-backend/.../controller/       # 18 Controllers
+backend/.../controller/       # 19 Controllers
 ├── AuthenticationController  # JWT auth, login/logout
 ├── PortfolioController       # Stock portfolio (22 endpoints)
 ├── AccountController         # Financial accounts
@@ -149,15 +149,18 @@ backend/.../controller/       # 18 Controllers
 ├── GardenController          # Digital garden
 ├── LifeLogController         # Life logging
 ├── MonitoringController      # Health metrics
+├── NewsController            # AI-curated news feed
 ├── PrometheusController      # Prometheus integration
 ├── ReportingController       # Data export
+├── SignalsController         # Life signals
+├── WatchlistController       # Stock watchlist
 └── ...                       # Additional controllers
 ```
 
 ### 3. Service Layer (Business Logic)
 
 ```
-backend/.../service/          # 57 Services
+backend/.../service/          # 60 Services
 ├── PORTFOLIO DOMAIN
 │   ├── PortfolioService          # Main orchestrator (18 methods)
 │   ├── StockHoldingService       # CRUD operations (14 methods)
@@ -188,6 +191,9 @@ backend/.../service/          # 57 Services
 │   ├── QuickFactService
 │   └── TripService
 │
+├── NEWS DOMAIN (NEW)
+│   └── NewsService               # AI-powered news with LLM ranking
+│
 └── MONITORING DOMAIN
     ├── MetricsService
     ├── ServiceHealthService
@@ -197,7 +203,7 @@ backend/.../service/          # 57 Services
 ### 4. Repository Layer (Data Access)
 
 ```
-backend/.../repository/       # 15 Repositories
+backend/.../repository/       # 19 Repositories
 ├── AccountRepository
 ├── AccountBalanceHistoryRepository
 ├── StockTickerRepository     # Complex queries for stocks
@@ -212,13 +218,15 @@ backend/.../repository/       # 15 Repositories
 ├── GardenRepository
 ├── FamilyMemberRepository
 ├── WatchlistRepository
-└── PaperTransactionRepository
+├── PaperTransactionRepository
+├── NewsCategoryRepository    # News topics/tabs
+└── NewsArticleRepository     # Curated articles with relevanceScore
 ```
 
 ### 5. Model Layer (Entities)
 
 ```
-backend/.../model/            # 26 Entities
+backend/.../model/            # 30 Entities
 ├── CORE
 │   ├── User
 │   └── Role (enum)
@@ -229,8 +237,13 @@ backend/.../model/            # 26 Entities
 │   ├── StockTicker
 │   ├── StockTransaction
 │   ├── StockDailyPrice
+│   ├── CurrentStockPrice
 │   ├── WatchlistItem
 │   └── PaperTransaction
+│
+├── NEWS (NEW)
+│   ├── NewsCategory         # Topics with tabs (Politics, Entertainment, Science, etc.)
+│   └── NewsArticle          # Articles with LLM-generated relevanceScore (1-10)
 │
 ├── CONTENT
 │   ├── SocialMediaPost
@@ -244,10 +257,15 @@ backend/.../model/            # 26 Entities
 │   ├── LifeLogType (enum)
 │   └── FamilyMember
 │
-└── GARDEN
-    ├── GardenNote
-    ├── GrowthStage (enum)
-    └── UpcomingTrip
+├── GARDEN
+│   ├── GardenNote
+│   ├── GrowthStage (enum)
+│   └── UpcomingTrip
+│
+└── AI/SETTINGS
+    ├── ChatMessage
+    ├── ConversationContext
+    └── GlobalSetting
 ```
 
 ---
@@ -316,6 +334,7 @@ graph LR
 | Calendar | `/api/calendar` | `GET /events`, `POST /events`, `PUT /events/{id}` |
 | Chat | `/api/chat` | `POST /message`, `GET /history` |
 | Content | `/api/content` | `GET /posts`, `POST /posts`, `GET /quick-facts` |
+| **News** | `/api/news` | `GET /`, `GET /categories`, `POST /categories`, `DELETE /categories/{id}`, `POST /refresh` |
 | Monitoring | `/api/monitoring` | `GET /health`, `GET /metrics` |
 
 ### Response Pattern
@@ -426,18 +445,31 @@ async cachedGet<T>(url: string, cacheKey: string, ttlMs?: number): Promise<T>
 │  Frontend Cache (cacheService)          │  TTL: 30s-5min
 │  - Portfolio data                       │
 │  - Quick facts                          │
+│  - News articles                        │
 ├─────────────────────────────────────────┤
 │  Backend Cache (Caffeine)               │  TTL: 5-30min
 │  - Market data (MarketDataCacheManager) │
-│  - Calendar events                      │
-│  - Metadata                             │
+│  - Calendar events (GoogleCalendarCacheManager)
+│  - URL/Book metadata (MetadataCacheManager)
+│  - Stock prices (StockPriceCacheService)
 ├─────────────────────────────────────────┤
 │  Database (PostgreSQL)                  │  Persistent
 │  - Holdings, Transactions               │
 │  - Account snapshots                    │
 │  - Historical prices                    │
+│  - News articles with relevanceScore    │
 └─────────────────────────────────────────┘
 ```
+
+### Backend Cache Managers
+
+| Cache Manager | Purpose | TTL | Key Features |
+|---------------|---------|-----|----------|
+| `MarketDataCacheManager` | Stock prices | 5-30 min | Market-hours aware, batch ops, frequency tracking |
+| `GoogleCalendarCacheManager` | Calendar events | Configurable | Event synchronization |
+| `MetadataCacheManager` | URL/Book metadata | Long-term | ISBN, IMDB lookups |
+| `StockPriceCacheService` | Historical prices | Daily | Chart data caching |
+| `CacheMetricsService` | Monitoring | N/A | Hit/miss tracking, Prometheus metrics |
 
 ---
 
@@ -448,6 +480,12 @@ async cachedGet<T>(url: string, cacheKey: string, ttlMs?: number): Promise<T>
 - **Client**: `YahooFinanceService`
 - **Caching**: `MarketDataCacheManager` with intelligent TTL
 - **Methods**: `getBatchMarketData()`, `getHistoricalPrices()`
+
+### NewsAPI
+- **Purpose**: News article aggregation
+- **Client**: `NewsService`
+- **LLM Integration**: Gemini for relevance scoring (1-10) and summarization
+- **Default Categories**: US Politics, Trending Entertainment, Science Breakthroughs
 
 ### Google Calendar API
 - **Purpose**: Calendar event synchronization
@@ -717,5 +755,5 @@ sequenceDiagram
 
 ---
 
-*Document generated: 2026-01-31*
-*Version: 1.0*
+*Document updated: 2026-02-09*
+*Version: 1.1*

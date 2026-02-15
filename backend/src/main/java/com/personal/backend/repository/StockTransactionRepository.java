@@ -17,5 +17,7 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     
     List<StockTransaction> findByUserIdAndSymbolOrderByTransactionDateDesc(Long userId, String symbol);
     
+    List<StockTransaction> findByUserIdAndTransactionDateBetween(Long userId, java.time.LocalDate startDate, java.time.LocalDate endDate);
+    
     Page<StockTransaction> findByUserId(Long userId, Pageable pageable);
 }
