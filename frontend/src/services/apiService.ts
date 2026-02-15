@@ -61,7 +61,7 @@ class ApiService {
   }
 
   async getCompletePortfolio(detailed = true) {
-    const cacheKey = `complete-portfolio-${detailed}`;
+    const cacheKey = `complete-portfolio-${detailed}-v3`;
     return this.cachedGet(`/portfolio/complete?detailed=${detailed}`, cacheKey, 5 * 60 * 1000); // 5 minutes
   }
 
@@ -131,6 +131,58 @@ class ApiService {
   async getAccount(id: number) {
     const response = await this.api.get(`/accounts/${id}`);
     return response.data;
+  }
+
+  async getAccountTransactions(id: number) {
+    const response = await this.api.get(`/accounts/${id}/transactions`);
+    return response.data;
+  }
+
+  // Sandbox API
+  async createSandboxPortfolio(data: { name: string; description: string; initialBalance: number }) {
+    const response = await this.api.post('/sandbox/portfolios', data);
+    return response.data;
+  }
+
+  async getSandboxPortfolios() {
+    const response = await this.api.get('/sandbox/portfolios');
+    return response.data;
+  }
+
+  async getSandboxPortfolioDetails(id: number) {
+    const response = await this.api.get(`/sandbox/portfolios/${id}`);
+    return response.data;
+  }
+
+  async executeSandboxTrade(portfolioId: number, data: { symbol: string; type: 'BUY' | 'SELL'; quantity?: number; dollarAmount?: number; price?: number; date?: string }) {
+    const response = await this.api.post(`/sandbox/portfolios/${portfolioId}/transactions`, data);
+    return response.data;
+  }
+
+  async updateSandboxPortfolio(id: number, data: { name: string; description: string; initialBalance: number }) {
+    const response = await this.api.put(`/sandbox/portfolios/${id}`, data);
+    return response.data;
+  }
+
+  async getHistoricalPrice(symbol: string, date: string) {
+    const response = await this.api.get(`/sandbox/price?symbol=${symbol}&date=${date}`);
+    return response.data;
+  }
+
+  async deleteSandboxTransaction(portfolioId: number, transactionId: number) {
+    const response = await this.api.delete(`/sandbox/portfolios/${portfolioId}/transactions/${transactionId}`);
+    return response.data;
+  }
+
+  async editSandboxTransaction(portfolioId: number, transactionId: number, data: { symbol: string; type: 'BUY' | 'SELL'; quantity?: number; dollarAmount?: number; price?: number; date?: string }) {
+    const response = await this.api.put(`/sandbox/portfolios/${portfolioId}/transactions/${transactionId}`, data);
+    return response.data;
+  }
+
+  // Market Heat Map API
+  async getMarketHeatMap() {
+    const cacheKey = 'market-heatmap';
+    return this.cachedGet('/market/heatmap', cacheKey, 15 * 60 * 1000); // 15 minutes
   }
 
   async createAccount(account: any) {
