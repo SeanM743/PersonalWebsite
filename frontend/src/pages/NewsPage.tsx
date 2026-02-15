@@ -14,6 +14,7 @@ interface NewsArticle {
     source: string;
     imageUrl: string;
     publishedAt: string;
+    relevanceScore: number;
 }
 
 interface DisplayArticle extends NewsArticle {
@@ -111,41 +112,25 @@ const NewsPage: React.FC = () => {
         );
     }, [categories]);
 
-    // Filter by Tab and Interleave Sort
+    // Filter by Tab and Sort by Relevance Score
     const displayedArticles = useMemo(() => {
         // 1. Filter by Tab
         const filtered = allArticles.filter(a => a.tab === selectedTab);
 
-        // 2. Group by Topic
-        const articlesByTopic: { [key: string]: DisplayArticle[] } = {};
-        filtered.forEach(a => {
-            if (!articlesByTopic[a.topic]) articlesByTopic[a.topic] = [];
-            articlesByTopic[a.topic].push(a);
+        // 2. Sort by relevance score (descending), then by date (descending)
+        const sorted = [...filtered].sort((a, b) => {
+            // Primary: relevance score (higher first)
+            const scoreDiff = (b.relevanceScore || 5) - (a.relevanceScore || 5);
+            if (scoreDiff !== 0) return scoreDiff;
+
+            // Secondary: date (newer first)
+            return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
         });
 
-        // 3. Interleave (Round Robin)
-        const interleaved: DisplayArticle[] = [];
-        const topics = Object.keys(articlesByTopic);
-        let maxCount = 0;
-        topics.forEach(t => maxCount = Math.max(maxCount, articlesByTopic[t].length));
-
-        for (let i = 0; i < maxCount; i++) {
-            topics.forEach(topic => {
-                const article = articlesByTopic[topic][i];
-                if (article) interleaved.push(article);
-            });
-        }
-
-        // 4. Sort Interleaved by Date (optional override? User asked to mix it up)
-        // actually user asked "I don't want one particular category to dominate so we should mix it up"
-        // Interleaving achieves that. Sorting by date might undo it if one topic is fresher.
-        // Let's keep interleaved structure but maybe sort blocks by date? 
-        // Simple interleaving is usually best for "mixing up".
-        // However, we should deduplicate just in case.
-
+        // 3. Deduplicate
         const unique = new Map();
         const result: DisplayArticle[] = [];
-        interleaved.forEach(a => {
+        sorted.forEach(a => {
             if (!unique.has(a.id)) {
                 unique.set(a.id, true);
                 result.push(a);

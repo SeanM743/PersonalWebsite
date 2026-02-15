@@ -246,7 +246,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                         type="text"
                                         value={newAccountName}
                                         onChange={(e) => setNewAccountName(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                         placeholder="e.g., Savings Account"
                                     />
                                 </div>
@@ -255,7 +255,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                     <select
                                         value={newAccountType}
                                         onChange={(e) => setNewAccountType(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                     >
                                         <option value="CASH">Cash</option>
                                         <option value="RETIREMENT">Retirement</option>
@@ -269,7 +269,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                         type="number"
                                         value={newAccountBalance}
                                         onChange={(e) => setNewAccountBalance(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                         placeholder="0.00"
                                         step="0.01"
                                     />
@@ -313,7 +313,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                         type="text"
                                         value={editAccountName}
                                         onChange={(e) => setEditAccountName(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                     />
                                 </div>
                                 <div>
@@ -321,7 +321,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                     <select
                                         value={editAccountType}
                                         onChange={(e) => setEditAccountType(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                     >
                                         <option value="CASH">Cash</option>
                                         <option value="RETIREMENT">Retirement</option>
@@ -335,7 +335,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
                                         type="number"
                                         value={editAccountBalance}
                                         onChange={(e) => setEditAccountBalance(e.target.value)}
-                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                        className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-gray-900"
                                         step="0.01"
                                     />
                                 </div>

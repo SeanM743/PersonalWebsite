@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
+
 import { apiService } from '../../services/apiService';
 import { usePortfolio } from '../../contexts/PortfolioContext';
-import { TrendingUp, History, Edit2, Wallet, Plus } from 'lucide-react';
+import { TrendingUp, History, Edit2, Plus } from 'lucide-react';
+
+
+// Import Sandbox Components
+import SandboxDashboard from '../Sandbox/SandboxDashboard';
+import SandboxPortfolioDetailComponent from '../Sandbox/SandboxPortfolioDetail';
 
 import LoadingSpinner from '../UI/LoadingSpinner';
 import WatchlistWidget from './WatchlistWidget';
@@ -56,9 +62,15 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const [activeTab, setActiveTab] = useState<'holdings' | 'transactions' | 'sandbox' | 'performance'>('holdings');
     const [isAddTxnOpen, setIsAddTxnOpen] = useState(false);
 
+    // Sandbox Internal Navigation State
+    const [activeSandboxPortfolioId, setActiveSandboxPortfolioId] = useState<number | null>(null);
+
     // Use Portfolio Context for performance graph data
     const { historyData, loadHistory } = usePortfolio();
     const [historyPeriod, setHistoryPeriod] = useState('1M');
+    // ... rest of the file ... (lines 64-543 unchanged)
+    // ...
+
 
     // Transaction Form State
     const [txnSymbol, setTxnSymbol] = useState('');
@@ -70,6 +82,13 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const [txnQty, setTxnQty] = useState('');
     const [txnPrice, setTxnPrice] = useState('');
     const [txnDate, setTxnDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Account selection for transactions
+    const [allAccounts, setAllAccounts] = useState<any[]>([]);
+    const [txnAccountId, setTxnAccountId] = useState<string>('');
+
+    // Account transaction history (cash movements)
+    const [accountTransactions, setAccountTransactions] = useState<any[]>([]);
 
     // Selected symbol for chart (from watchlist clicks)
     const [selectedChartSymbol, setSelectedChartSymbol] = useState<string | undefined>(undefined);
@@ -123,6 +142,21 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
         }
     }, [account.id]);
 
+    // Fetch account transactions for all account types
+    useEffect(() => {
+        const loadAccountTransactions = async () => {
+            try {
+                const res = await apiService.getAccountTransactions(account.id);
+                if (res && res.success) {
+                    setAccountTransactions(res.data || []);
+                }
+            } catch (e) {
+                console.error('Failed to load account transactions', e);
+            }
+        };
+        loadAccountTransactions();
+    }, [account.id]);
+
     useEffect(() => {
         if (isStockAccount && activeTab === 'performance') {
             loadHistory(historyPeriod);
@@ -132,10 +166,11 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const loadStockData = async () => {
         setIsLoading(true);
         try {
-            const [txnsRes, holdingsRes, portfolioRes] = await Promise.all([
+            const [txnsRes, holdingsRes, portfolioRes, accountsRes] = await Promise.all([
                 apiService.getTransactions(),
                 apiService.getHoldings(),
-                apiService.getPortfolio(false)
+                apiService.getPortfolio(false),
+                apiService.getAccounts()
             ]);
 
             if (txnsRes && (txnsRes as any).success) setTransactions((txnsRes as any).data || []);
@@ -144,6 +179,9 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                 setPortfolioSummary((portfolioRes as any).data || {});
                 // Trigger parent update to refresh sidebar balance with new portfolio value
                 onUpdate();
+            }
+            if (accountsRes && (accountsRes as any).success) {
+                setAllAccounts((accountsRes as any).data || []);
             }
 
         } catch (e) {
@@ -177,19 +215,24 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
     const handleAddTransactionSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await apiService.addTransaction({
+            const payload: any = {
                 symbol: txnSymbol.toUpperCase(),
                 type: txnType,
                 quantity: parseFloat(txnQty),
                 pricePerShare: parseFloat(txnPrice),
                 transactionDate: txnDate,
                 totalCost: parseFloat(txnQty) * parseFloat(txnPrice)
-            });
+            };
+            if (txnAccountId) {
+                payload.accountId = parseInt(txnAccountId);
+            }
+            await apiService.addTransaction(payload);
             setIsAddTxnOpen(false);
             // Reset form
             setTxnSymbol('');
             setTxnQty('');
             setTxnPrice('');
+            setTxnAccountId('');
             // Reload data
             loadStockData();
             onUpdate(); // refresh balance
@@ -366,9 +409,14 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                                                                         </span>
                                                                     </div>
                                                                 </td>
-                                                                <td className={`py-3 px-4 text-right ${(h.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                                    {(h.totalGainLoss || 0) >= 0 ? '+' : ''}{(h.totalGainLossPercentage || 0).toFixed(2)}%
-                                                                </td>
+                                                                <div className="flex flex-col items-end">
+                                                                    <span className={`font-medium ${(h.totalGainLoss || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                        {(h.totalGainLoss || 0) >= 0 ? '+' : ''}${Math.abs(h.totalGainLoss || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                                    </span>
+                                                                    <span className="text-xs">
+                                                                        ({(h.totalGainLoss || 0) >= 0 ? '+' : ''}{(h.totalGainLossPercentage || 0).toFixed(2)}%)
+                                                                    </span>
+                                                                </div>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -377,8 +425,6 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
 
                                             {/* Right Column: Market Indices + Stock Performance Chart */}
                                             <div className="flex flex-col gap-4">
-                                                <MarketIndices />
-
                                                 {holdings.length > 0 && (
                                                     <div className="flex-1">
                                                         <StockPerformanceChart holdings={holdings} externalSymbol={selectedChartSymbol} />
@@ -511,34 +557,71 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                                     )}
 
                                     {activeTab === 'sandbox' && (
-                                        <div className="bg-card rounded-lg p-8 text-center border border-border border-dashed">
-                                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4">
-                                                <Wallet className="w-6 h-6" />
-                                            </div>
-                                            <h3 className="text-lg font-medium text-main">Paper Trading Sandbox</h3>
-                                            <p className="text-muted mt-2 max-w-sm mx-auto">
-                                                Simulate trades and test "what-if" scenarios without affecting your actual portfolio.
-                                                <br /><span className="text-xs uppercase font-bold text-blue-500 mt-2 block">Coming Soon</span>
-                                            </p>
+                                        <div className="bg-card rounded-lg p-6 animate-fadeIn">
+                                            {activeSandboxPortfolioId ? (
+                                                <SandboxPortfolioDetailComponent
+                                                    portfolioId={activeSandboxPortfolioId}
+                                                    onBack={() => setActiveSandboxPortfolioId(null)}
+                                                />
+                                            ) : (
+                                                <SandboxDashboard
+                                                    onSelectPortfolio={(id) => setActiveSandboxPortfolioId(id)}
+                                                />
+                                            )}
                                         </div>
                                     )}
                                 </>
                             )}
                         </>
                     ) : (
-                        /* Default/Manual Account View */
-                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border text-center py-12">
-                            <History className="h-12 w-12 text-muted mx-auto mb-4" />
-                            <h3 className="text-lg font-medium text-main">History Tracking</h3>
-                            <p className="text-muted mt-2">
-                                Historical balance tracking for {account.name} will appear here.
-                            </p>
+                        /* Default/Manual Account View — Transaction History */
+                        <div className="bg-card rounded-lg p-6 shadow-sm border border-border">
+                            <h3 className="text-lg font-medium text-main mb-4 flex items-center">
+                                <History className="h-5 w-5 mr-2" />
+                                Transaction History
+                            </h3>
+                            {accountTransactions.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <History className="h-10 w-10 text-muted mx-auto mb-3 opacity-40" />
+                                    <p className="text-muted text-sm">No transactions yet for this account.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-border text-muted">
+                                                <th className="text-left py-2 px-3 font-medium">Date</th>
+                                                <th className="text-left py-2 px-3 font-medium">Description</th>
+                                                <th className="text-right py-2 px-3 font-medium">Amount</th>
+                                                <th className="text-right py-2 px-3 font-medium">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {accountTransactions.map((txn: any) => (
+                                                <tr key={txn.id} className="border-b border-border/50 hover:bg-page/50 transition-colors">
+                                                    <td className="py-2.5 px-3 text-main">
+                                                        {new Date(txn.transactionDate).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="py-2.5 px-3 text-main">{txn.description}</td>
+                                                    <td className={`py-2.5 px-3 text-right font-medium ${txn.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {txn.type === 'CREDIT' ? '+' : '-'}${Number(txn.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="py-2.5 px-3 text-right text-main font-medium">
+                                                        ${Number(txn.newBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
 
                 {isStockAccount && (
                     <div className="space-y-6">
+                        <MarketIndices />
                         <WatchlistWidget />
 
                         {/* Simplified Performance Card */}
@@ -566,6 +649,19 @@ const AccountDetails: React.FC<AccountDetailsProps> = ({ account, onUpdate }) =>
                         <div className="bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md animate-in fade-in zoom-in duration-200">
                             <h3 className="text-lg font-bold text-main mb-4">Add Real Transaction</h3>
                             <form onSubmit={handleAddTransactionSubmit} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-muted mb-1">From Account</label>
+                                    <select
+                                        className="w-full bg-page border border-border rounded px-3 py-2 text-main"
+                                        value={txnAccountId}
+                                        onChange={e => setTxnAccountId(e.target.value)}
+                                    >
+                                        <option value="">Default (Fidelity Cash)</option>
+                                        {allAccounts.filter(a => a.type === 'CASH').map(a => (
+                                            <option key={a.id} value={a.id}>{a.name} (${(a.balance || 0).toLocaleString()})</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div>
                                     <label className="block text-sm font-medium text-muted mb-1">Date</label>
                                     <input

@@ -48,7 +48,7 @@ public class NewsService {
     
     @Transactional
     public List<NewsArticle> getArticlesForCategory(Long categoryId) {
-        return articleRepository.findByCategoryIdOrderByPublishedAtDesc(categoryId);
+        return articleRepository.findByCategoryIdOrderByRelevanceScoreDescPublishedAtDesc(categoryId);
     }
 
     @javax.annotation.PostConstruct
@@ -59,12 +59,52 @@ public class NewsService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
-        // No longer enforcing static categories
+        log.info("Ensuring default categories exist...");
+        ensureDefaultCategories(1L);
+        
         log.info("Checking for stale news on startup...");
         try {
            refreshNewsForUser(1L, false); 
         } catch (Exception e) {
            log.error("Failed to refresh news on startup", e);
+        }
+    }
+    
+    private void ensureDefaultCategories(Long userId) {
+        // Default Politics category
+        if (!categoryRepository.existsByUserIdAndTopic(userId, "US Politics")) {
+            NewsCategory politics = NewsCategory.builder()
+                    .userId(userId)
+                    .topic("US Politics")
+                    .tab("Politics")
+                    .searchQuery("Trump OR Congress OR Supreme Court OR White House policy")
+                    .build();
+            categoryRepository.save(politics);
+            log.info("Created default Politics category");
+        }
+        
+        // Default Entertainment category
+        if (!categoryRepository.existsByUserIdAndTopic(userId, "Trending Entertainment")) {
+            NewsCategory entertainment = NewsCategory.builder()
+                    .userId(userId)
+                    .topic("Trending Entertainment")
+                    .tab("Entertainment")
+                    .searchQuery("celebrity OR movie premiere OR music release OR viral")
+                    .build();
+            categoryRepository.save(entertainment);
+            log.info("Created default Entertainment category");
+        }
+        
+        // Default Science category
+        if (!categoryRepository.existsByUserIdAndTopic(userId, "Science Breakthroughs")) {
+            NewsCategory science = NewsCategory.builder()
+                    .userId(userId)
+                    .topic("Science Breakthroughs")
+                    .tab("Science")
+                    .searchQuery("AI breakthrough OR cancer research OR space exploration OR quantum computing OR aging research")
+                    .build();
+            categoryRepository.save(science);
+            log.info("Created default Science category");
         }
     }
 
@@ -74,7 +114,7 @@ public class NewsService {
         String searchQuery = explicitQuery;
         
         // Validation for tab
-        if (tab == null || !List.of("Financial", "Sports", "Politics", "Misc").contains(tab)) {
+        if (tab == null || !List.of("Financial", "Sports", "Politics", "Entertainment", "Science", "Misc").contains(tab)) {
             tab = "Misc"; // Default
         }
 
@@ -140,7 +180,7 @@ public class NewsService {
             if (topic != null && !topic.trim().isEmpty()) {
                 category.setTopic(topic.trim());
             }
-            if (tab != null && List.of("Financial", "Sports", "Politics", "Misc").contains(tab)) {
+            if (tab != null && List.of("Financial", "Sports", "Politics", "Entertainment", "Science", "Misc").contains(tab)) {
                 category.setTab(tab);
             }
             if (query != null) {
@@ -248,6 +288,7 @@ public class NewsService {
         // LLM Relevance Check & Summarization
         String summary = description;
         String fullWriteup = content;
+        int relevanceScore = 5; // Default score
         
         if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
             try {
@@ -266,17 +307,24 @@ public class NewsService {
                                        "REJECT if it's about a different team from the same city/region, a different sport entirely, or only tangentially mentions the topic.";
                         break;
                     case "Politics":
-                        promptContext = "This article must be about US Congress, White House, elections, OR the specific political topic '" + category.getTopic() + "'. " +
-                                       "REJECT opinion pieces without news value.";
+                        promptContext = "BE EXTREMELY STRICT. This article must be about US FEDERAL politics ONLY: Trump administration, Congress, Supreme Court, federal agencies, or major US legislation. " +
+                                       "AUTOMATIC REJECTION CRITERIA (return relevant:false immediately): " +
+                                       "- ANY non-US source (Irish Times, BBC, Guardian UK, etc.) " +
+                                       "- Health/medical stories (cancer, disease, healthcare personal stories) " +
+                                       "- Lifestyle, entertainment, sports, technology not related to policy " +
+                                       "- State/local politics " +
+                                       "- Opinion pieces without hard news " +
+                                       "- International politics unless US is the primary subject";
+                        promptRefusal = "If this fails ANY of the automatic rejection criteria above, return { \"relevant\": false } immediately. Do not try to find tenuous connections.";
                         break;
                     case "Entertainment":
-                        promptContext = "This article must DIRECTLY discuss '" + category.getTopic() + "' - the specific show, movie, artist, or game. " +
-                                       "REJECT 'best of' lists, generic recommendations, or articles that only briefly mention the topic.";
+                        promptContext = "This article must be about MAINSTREAM US entertainment: celebrity news, Hollywood movies/TV, chart-topping music, viral social media moments. " +
+                                       "REJECT: health stories, personal interest pieces, non-entertainment news, local/regional events, 'best of' lists.";
                         break;
                     case "Science":
-                        promptContext = "This article should cover scientific breakthroughs, space exploration, research discoveries, climate science, physics, biology, or technology announcements. " +
-                                       "If a specific topic is provided ('" + category.getTopic() + "'), prioritize articles directly about it. " +
-                                       "REJECT opinion pieces, product reviews, and general tech gadget news unless it involves a genuine scientific advancement.";
+                        promptContext = "PRIORITIZE major breakthroughs in: cancer/aging/drug research, space exploration (NASA, SpaceX), artificial intelligence (new models, architectures), quantum computing. " +
+                                       "This must be a MAJOR scientific advancement from a reputable source. " +
+                                       "REJECT: personal health stories, product reviews, tech gadgets, lifestyle/wellness, routine news, opinion pieces.";
                         break;
                     case "Misc":
                     default:
@@ -290,8 +338,9 @@ public class NewsService {
                         "%s\n\n" +
                         "If relevant, provide a JSON object with: \n" +
                         "1. \"relevant\": true\n" +
-                        "2. \"summary\": \"A concise 3-sentence summary highlighting the specific %s impact.\"\n" +
-                        "3. \"writeup\": \"A detailed 2-paragraph analysis.\"\n\n" +
+                        "2. \"relevanceScore\": <1-10 integer> - Rate importance: 10=breaking/major news, 7-9=significant development, 4-6=normal news, 1-3=minor/tangential\n" +
+                        "3. \"summary\": \"A concise 3-sentence summary highlighting the specific %s impact.\"\n" +
+                        "4. \"writeup\": \"A detailed 2-paragraph analysis.\"\n\n" +
                         "Title: %s\nContent: %s\nDescription: %s", 
                         category.getTopic(), tab, promptContext, promptRefusal, category.getTopic(), title, content, description);
                 
@@ -313,6 +362,13 @@ public class NewsService {
                     
                     summary = (String) result.getOrDefault("summary", description);
                     fullWriteup = (String) result.getOrDefault("writeup", content);
+                    
+                    // Parse relevance score
+                    Object scoreObj = result.get("relevanceScore");
+                    if (scoreObj instanceof Number) {
+                        int score = ((Number) scoreObj).intValue();
+                        relevanceScore = Math.max(1, Math.min(10, score)); // Clamp to 1-10
+                    }
                 }
                 
             } catch (Exception e) {
@@ -331,7 +387,18 @@ public class NewsService {
                 .publishedAt(publishedAt)
                 .summary(summary)
                 .content(fullWriteup)
+                .relevanceScore(relevanceScore)
                 .build();
+        
+        // Check for duplicates by URL (primary) or title (fallback)
+        if (url != null && !url.isEmpty() && articleRepository.existsByCategoryIdAndUrl(category.getId(), url)) {
+            log.debug("Skipping duplicate article (by URL): {}", title);
+            return false;
+        }
+        if (articleRepository.existsByCategoryIdAndTitle(category.getId(), title)) {
+            log.debug("Skipping duplicate article (by title): {}", title);
+            return false;
+        }
         
         articleRepository.save(article);
         return true;
