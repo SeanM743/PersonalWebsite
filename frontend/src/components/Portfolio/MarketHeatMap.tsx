@@ -151,10 +151,12 @@ const MarketHeatMap: React.FC = () => {
             let symbols: string[] = [];
 
             if (mode === 'portfolio') {
-                const holdings = await apiService.getHoldings() as any[];
-                symbols = holdings.map((h: any) => h.symbol);
+                const response = await apiService.getHoldings() as any;
+                const holdings = response?.data || response;
+                symbols = (Array.isArray(holdings) ? holdings : []).map((h: any) => h.symbol);
             } else {
-                const watchlist = await apiService.getWatchlist() as any[];
+                const response = await apiService.getWatchlist() as any;
+                const watchlist = Array.isArray(response) ? response : (response?.data || []);
                 symbols = watchlist.map((w: any) => w.symbol);
             }
 
