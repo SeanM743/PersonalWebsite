@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -211,5 +212,32 @@ public class AccountServiceTest {
         // Assert
         verify(historyRepository, times(1)).deleteAll(any());
         verify(accountRepository, times(1)).delete(manualAccount);
+    }
+
+    @Test
+    void testUpdateBalance_UpdatesBalanceAndRecordsSnapshot() {
+        // Arrange
+        Long accountId = 1L;
+        BigDecimal newBalance = new BigDecimal("5000.00");
+        Account account = new Account();
+        account.setId(accountId);
+        account.setName("Test Account");
+        account.setBalance(new BigDecimal("1000.00")); // Old balance
+        account.setType(Account.AccountType.CASH);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Mock history lookup to return empty (new day)
+        when(historyRepository.findByAccountIdAndDateBetweenOrderByDateAsc(anyLong(), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        // Act
+        Account updatedAccount = accountService.updateBalance(accountId, newBalance);
+
+        // Assert
+        assertEquals(newBalance, updatedAccount.getBalance());
+        verify(accountRepository).save(account);
+        verify(historyRepository).save(any(com.personal.backend.model.AccountBalanceHistory.class));
     }
 }

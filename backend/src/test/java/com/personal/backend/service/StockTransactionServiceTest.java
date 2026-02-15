@@ -3,9 +3,11 @@ package com.personal.backend.service;
 import com.personal.backend.dto.PortfolioResponse;
 import com.personal.backend.dto.StockRequest;
 import com.personal.backend.model.Account;
+import com.personal.backend.model.AccountTransaction;
 import com.personal.backend.model.StockTicker;
 import com.personal.backend.model.StockTransaction;
 import com.personal.backend.repository.AccountRepository;
+import com.personal.backend.repository.AccountTransactionRepository;
 import com.personal.backend.repository.StockTransactionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,9 @@ class StockTransactionServiceTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Mock
+    private AccountTransactionRepository accountTransactionRepository;
 
     @Mock
     private StockHoldingService stockHoldingService;

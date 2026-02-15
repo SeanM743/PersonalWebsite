@@ -39,6 +39,9 @@ public class NewsArticle {
     
     private LocalDateTime publishedAt;
     
+    @Builder.Default
+    private Integer relevanceScore = 5; // 1-10 scale, higher = more relevant
+    
     @CreationTimestamp
     private LocalDateTime createdAt;
 
