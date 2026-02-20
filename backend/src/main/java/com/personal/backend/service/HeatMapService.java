@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import org.springframework.cache.annotation.Cacheable;
+
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -19,10 +21,7 @@ public class HeatMapService {
 
     private final YahooFinanceService yahooFinanceService;
 
-    // Cached result (refreshed at most once per request, real caching via Spring @Cacheable if desired)
-    private HeatMapDTO cachedHeatMap;
-    private long cacheTimestamp = 0;
-    private static final long CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+    // Real caching using Spring's @Cacheable
 
     /**
      * Curated list of top S&P 500 stocks by sector.
@@ -149,12 +148,8 @@ public class HeatMapService {
         ));
     }
 
+    @Cacheable("heatMap")
     public HeatMapDTO getHeatMapData() {
-        // Return cached data if fresh enough
-        if (cachedHeatMap != null && (System.currentTimeMillis() - cacheTimestamp) < CACHE_TTL_MS) {
-            return cachedHeatMap;
-        }
-
         log.info("Fetching heat map data for {} sectors", SECTOR_STOCKS.size());
 
         // Collect all symbols
@@ -212,13 +207,12 @@ public class HeatMapService {
                     .build());
         }
 
-        cachedHeatMap = HeatMapDTO.builder().sectors(sectors).build();
-        cacheTimestamp = System.currentTimeMillis();
+        HeatMapDTO heatMap = HeatMapDTO.builder().sectors(sectors).build();
 
         log.info("Heat map data fetched successfully: {} sectors, {} total stocks",
                 sectors.size(), allSymbols.size());
 
-        return cachedHeatMap;
+        return heatMap;
     }
 
     /**

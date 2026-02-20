@@ -19,7 +19,10 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @Slf4j
@@ -119,12 +122,21 @@ public class GoogleCalendarConfiguration {
     @Bean
     public GoogleCalendarProperties googleCalendarProperties(
             @Value("${google.calendar.default.calendar.id}") String defaultCalendarId,
+            @Value("${google.calendar.additional.calendar.ids:}") String additionalCalendarIds,
             @Value("${google.calendar.api.timeout}") int apiTimeout,
             @Value("${google.calendar.cache.ttl.minutes}") int cacheTtlMinutes,
             @Value("${google.calendar.max.events.per.request}") int maxEventsPerRequest) {
         
+        List<String> additionalIds = additionalCalendarIds.isEmpty()
+                ? Collections.emptyList()
+                : Arrays.stream(additionalCalendarIds.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(Collectors.toList());
+        
         return GoogleCalendarProperties.builder()
                 .defaultCalendarId(defaultCalendarId)
+                .additionalCalendarIds(additionalIds)
                 .apiTimeout(apiTimeout)
                 .cacheTtlMinutes(cacheTtlMinutes)
                 .maxEventsPerRequest(maxEventsPerRequest)
@@ -138,10 +150,21 @@ public class GoogleCalendarConfiguration {
     @lombok.Builder
     public static class GoogleCalendarProperties {
         private String defaultCalendarId;
+        private List<String> additionalCalendarIds;
         private int apiTimeout;
         private int cacheTtlMinutes;
         private int maxEventsPerRequest;
         private String credentialsFilePath;
         private String applicationName;
+        
+        /** Returns all calendar IDs to query (default + additional) */
+        public List<String> getAllCalendarIds() {
+            List<String> all = new java.util.ArrayList<>();
+            all.add(defaultCalendarId);
+            if (additionalCalendarIds != null) {
+                all.addAll(additionalCalendarIds);
+            }
+            return all;
+        }
     }
 }

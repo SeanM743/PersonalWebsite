@@ -3,6 +3,7 @@ package com.personal.backend.repository;
 import com.personal.backend.model.NewsArticle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -10,6 +11,7 @@ import java.util.List;
 public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> {
     List<NewsArticle> findByCategoryIdOrderByPublishedAtDesc(Long categoryId);
     List<NewsArticle> findByCategoryIdOrderByRelevanceScoreDescPublishedAtDesc(Long categoryId);
+    @Transactional
     void deleteByCategoryId(Long categoryId);
     
     // Duplicate detection - check if article URL already exists for this category

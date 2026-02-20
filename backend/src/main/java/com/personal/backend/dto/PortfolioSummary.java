@@ -27,6 +27,15 @@ public class PortfolioSummary {
     // YTD Performance
     private BigDecimal totalGainLossYTD;
     private BigDecimal totalGainLossPercentageYTD;
+
+    // Period Performance (7d, 1m, 3m)
+    private BigDecimal totalGainLoss7d;
+    private BigDecimal totalGainLossPercentage7d;
+    private BigDecimal totalGainLoss1m;
+    private BigDecimal totalGainLossPercentage1m;
+    private BigDecimal totalGainLoss3m;
+    private BigDecimal totalGainLossPercentage3m;
+
     private Integer totalPositions;
     private Integer positionsUp;
     private Integer positionsDown;

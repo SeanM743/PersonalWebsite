@@ -247,12 +247,8 @@ class ApiService {
   }
 
   // Calendar API
-  async getCalendarEvents(startDate?: string, endDate?: string) {
-    const params = new URLSearchParams();
-    if (startDate) params.append('startDate', startDate);
-    if (endDate) params.append('endDate', endDate);
-
-    const response = await this.api.get(`/calendar/events?${params.toString()}`);
+  async getCalendarEvents(days: number = 90) {
+    const response = await this.api.get(`/calendar/events?days=${days}`);
     return response.data;
   }
 

@@ -38,6 +38,15 @@ public class CalendarController {
     private final GoogleCalendarTokenManager tokenManager;
     
     /**
+     * Get events - general purpose endpoint for frontend calendar page
+     */
+    @GetMapping("/events")
+    public ResponseEntity<CalendarResponse<List<CalendarEvent>>> getEvents(
+            @RequestParam(defaultValue = "90") int days) {
+        return getUpcomingEvents(days);
+    }
+    
+    /**
      * Get upcoming events (public endpoint)
      */
     @GetMapping("/upcoming")

@@ -154,58 +154,9 @@ public class SandboxService {
         BigDecimal totalCost = quantity.multiply(price);
         
         if (request.getType() == SandboxTransaction.TransactionType.BUY) {
-            // Check sufficient funds
-            if (portfolio.getCurrentBalance().compareTo(totalCost) < 0) {
-                throw new IllegalArgumentException("Insufficient funds for trade. Required: $" + totalCost + ", Available: $" + portfolio.getCurrentBalance());
-            }
-            // Deduct cash
-            portfolio.setCurrentBalance(portfolio.getCurrentBalance().subtract(totalCost));
-            
-            // Update/Create Holding
-            SandboxHolding holding = holdingRepository.findByPortfolioIdAndSymbol(portfolioId, request.getSymbol())
-                    .orElse(SandboxHolding.builder()
-                            .portfolio(portfolio)
-                            .symbol(request.getSymbol())
-                            .quantity(BigDecimal.ZERO)
-                            .averageCost(BigDecimal.ZERO)
-                            .build());
-                            
-            // Recalculate Average Cost: (OldQty * OldAvg + NewQty * NewPrice) / (OldQty + NewQty)
-            BigDecimal currentTotalValue = holding.getQuantity().multiply(holding.getAverageCost());
-            BigDecimal tradeValue = quantity.multiply(price);
-            BigDecimal newTotalValue = currentTotalValue.add(tradeValue);
-            
-            BigDecimal newQuantity = holding.getQuantity().add(quantity);
-            BigDecimal newAvgCost = BigDecimal.ZERO;
-            if (newQuantity.compareTo(BigDecimal.ZERO) > 0) {
-                 newAvgCost = newTotalValue.divide(newQuantity, 4, RoundingMode.HALF_UP);
-            }
-            
-            holding.setQuantity(newQuantity);
-            holding.setAverageCost(newAvgCost);
-            holdingRepository.save(holding);
-            
+            processBuyTransaction(portfolioId, portfolio, request.getSymbol(), quantity, price, totalCost);
         } else if (request.getType() == SandboxTransaction.TransactionType.SELL) {
-            // Check sufficient quantity
-            SandboxHolding holding = holdingRepository.findByPortfolioIdAndSymbol(portfolioId, request.getSymbol())
-                    .orElseThrow(() -> new IllegalArgumentException("Cannot sell symbol not owned: " + request.getSymbol()));
-            
-            if (holding.getQuantity().compareTo(quantity) < 0) {
-                throw new IllegalArgumentException("Insufficient quantity to sell. Owned: " + holding.getQuantity());
-            }
-            
-            // Add cash
-            portfolio.setCurrentBalance(portfolio.getCurrentBalance().add(totalCost));
-            
-            // Update Holding
-            BigDecimal newQuantity = holding.getQuantity().subtract(quantity);
-            if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
-                holdingRepository.delete(holding);
-            } else {
-                holding.setQuantity(newQuantity);
-                // Average cost doesn't change on SELL
-                holdingRepository.save(holding);
-            }
+            processSellTransaction(portfolioId, portfolio, request.getSymbol(), quantity, totalCost);
         }
         
         portfolioRepository.save(portfolio);
@@ -222,6 +173,62 @@ public class SandboxService {
                 .build();
                 
         return transactionRepository.save(txn);
+    }
+
+    private void processBuyTransaction(Long portfolioId, SandboxPortfolio portfolio, String symbol, BigDecimal quantity, BigDecimal price, BigDecimal totalCost) {
+        // Check sufficient funds
+        if (portfolio.getCurrentBalance().compareTo(totalCost) < 0) {
+            throw new IllegalArgumentException("Insufficient funds for trade. Required: $" + totalCost + ", Available: $" + portfolio.getCurrentBalance());
+        }
+        // Deduct cash
+        portfolio.setCurrentBalance(portfolio.getCurrentBalance().subtract(totalCost));
+        
+        // Update/Create Holding
+        SandboxHolding holding = holdingRepository.findByPortfolioIdAndSymbol(portfolioId, symbol)
+                .orElse(SandboxHolding.builder()
+                        .portfolio(portfolio)
+                        .symbol(symbol)
+                        .quantity(BigDecimal.ZERO)
+                        .averageCost(BigDecimal.ZERO)
+                        .build());
+                        
+        // Recalculate Average Cost: (OldQty * OldAvg + NewQty * NewPrice) / (OldQty + NewQty)
+        BigDecimal currentTotalValue = holding.getQuantity().multiply(holding.getAverageCost());
+        BigDecimal tradeValue = quantity.multiply(price);
+        BigDecimal newTotalValue = currentTotalValue.add(tradeValue);
+        
+        BigDecimal newQuantity = holding.getQuantity().add(quantity);
+        BigDecimal newAvgCost = BigDecimal.ZERO;
+        if (newQuantity.compareTo(BigDecimal.ZERO) > 0) {
+             newAvgCost = newTotalValue.divide(newQuantity, 4, RoundingMode.HALF_UP);
+        }
+        
+        holding.setQuantity(newQuantity);
+        holding.setAverageCost(newAvgCost);
+        holdingRepository.save(holding);
+    }
+
+    private void processSellTransaction(Long portfolioId, SandboxPortfolio portfolio, String symbol, BigDecimal quantity, BigDecimal totalCost) {
+        // Check sufficient quantity
+        SandboxHolding holding = holdingRepository.findByPortfolioIdAndSymbol(portfolioId, symbol)
+                .orElseThrow(() -> new IllegalArgumentException("Cannot sell symbol not owned: " + symbol));
+        
+        if (holding.getQuantity().compareTo(quantity) < 0) {
+            throw new IllegalArgumentException("Insufficient quantity to sell. Owned: " + holding.getQuantity());
+        }
+        
+        // Add cash
+        portfolio.setCurrentBalance(portfolio.getCurrentBalance().add(totalCost));
+        
+        // Update Holding
+        BigDecimal newQuantity = holding.getQuantity().subtract(quantity);
+        if (newQuantity.compareTo(BigDecimal.ZERO) == 0) {
+            holdingRepository.delete(holding);
+        } else {
+            holding.setQuantity(newQuantity);
+            // Average cost doesn't change on SELL
+            holdingRepository.save(holding);
+        }
     }
 
     public SandboxPortfolio updatePortfolio(Long id, CreatePortfolioRequest request) {

@@ -64,43 +64,63 @@ public class GoogleCalendarEventManager {
             }
             
             Calendar service = calendarClient.getCalendarService();
-            String calendarId = query.getCalendarId() != null ? query.getCalendarId() : properties.getDefaultCalendarId();
             
-            // Build the API request
-            Calendar.Events.List request = service.events().list(calendarId);
+            // Determine which calendars to query
+            List<String> calendarIds;
+            if (query.getCalendarId() != null) {
+                // Specific calendar requested
+                calendarIds = List.of(query.getCalendarId());
+            } else {
+                // Query all configured calendars (personal + holidays, etc.)
+                calendarIds = properties.getAllCalendarIds();
+            }
             
-            // Set query parameters
-            configureEventQuery(request, query);
+            // Aggregate events from all calendars
+            List<CalendarEvent> allEvents = new ArrayList<>();
+            List<String> queriedCalendars = new ArrayList<>();
             
-            // Execute the request
-            Events events = request.execute();
+            for (String calendarId : calendarIds) {
+                try {
+                    Calendar.Events.List request = service.events().list(calendarId);
+                    configureEventQuery(request, query);
+                    Events events = request.execute();
+                    
+                    if (events.getItems() != null && !events.getItems().isEmpty()) {
+                        List<CalendarEvent> calendarEvents = events.getItems().stream()
+                                .map(eventMapper::fromGoogleEvent)
+                                .filter(event -> event != null)
+                                .collect(Collectors.toList());
+                        allEvents.addAll(calendarEvents);
+                    }
+                    queriedCalendars.add(calendarId);
+                    log.debug("Retrieved {} events from calendar: {}", 
+                            events.getItems() != null ? events.getItems().size() : 0, calendarId);
+                } catch (Exception e) {
+                    log.warn("Failed to query calendar '{}': {}", calendarId, e.getMessage());
+                    // Continue with other calendars even if one fails
+                }
+            }
             
-            if (events.getItems() == null || events.getItems().isEmpty()) {
-                log.debug("No events found for query");
+            if (allEvents.isEmpty()) {
+                log.debug("No events found across {} calendars", queriedCalendars.size());
                 return CalendarResponse.noEventsFound();
             }
             
-            // Convert Google events to internal model
-            List<CalendarEvent> calendarEvents = events.getItems().stream()
-                    .map(eventMapper::fromGoogleEvent)
-                    .filter(event -> event != null)
-                    .collect(Collectors.toList());
-            
             // Apply additional filtering if needed
-            calendarEvents = applyAdditionalFiltering(calendarEvents, query);
+            allEvents = applyAdditionalFiltering(allEvents, query);
             
             // Sort events
-            sortEvents(calendarEvents, query.getOrderBy());
+            sortEvents(allEvents, query.getOrderBy());
             
-            log.info("Retrieved {} events from Google Calendar", calendarEvents.size());
+            log.info("Retrieved {} total events from {} calendars", allEvents.size(), queriedCalendars.size());
             
             Map<String, Object> metadata = Map.of(
-                    "totalEvents", calendarEvents.size(),
-                    "calendarId", calendarId,
+                    "totalEvents", allEvents.size(),
+                    "calendarsQueried", queriedCalendars.size(),
                     "queryRange", String.format("%s to %s", query.getStartDate(), query.getEndDate())
             );
             
-            return CalendarResponse.success(calendarEvents, "Events retrieved successfully", metadata);
+            return CalendarResponse.success(allEvents, "Events retrieved successfully", metadata);
             
         } catch (IOException e) {
             log.error("IO error retrieving events: {}", e.getMessage(), e);
@@ -122,7 +142,7 @@ public class GoogleCalendarEventManager {
         EventQueryRequest query = EventQueryRequest.builder()
                 .startDate(LocalDateTime.now())
                 .endDate(LocalDateTime.now().plusDays(days))
-                .maxResults(50)
+                .maxResults(250)
                 .orderBy("startTime")
                 .showDeleted(false)
                 .singleEvents(true)
@@ -264,17 +284,20 @@ public class GoogleCalendarEventManager {
     }
     
     private void configureEventQuery(Calendar.Events.List request, EventQueryRequest query) throws IOException {
+        // Use the user's timezone (not the server's system default which may be UTC)
+        ZoneId userTimezone = ZoneId.of("America/Los_Angeles");
+        
         // Set time range
         if (query.getStartDate() != null) {
             DateTime startTime = new DateTime(
-                    ZonedDateTime.of(query.getStartDate(), ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    ZonedDateTime.of(query.getStartDate(), userTimezone).toInstant().toEpochMilli()
             );
             request.setTimeMin(startTime);
         }
         
         if (query.getEndDate() != null) {
             DateTime endTime = new DateTime(
-                    ZonedDateTime.of(query.getEndDate(), ZoneId.systemDefault()).toInstant().toEpochMilli()
+                    ZonedDateTime.of(query.getEndDate(), userTimezone).toInstant().toEpochMilli()
             );
             request.setTimeMax(endTime);
         }
@@ -297,9 +320,8 @@ public class GoogleCalendarEventManager {
         request.setShowDeleted(query.isShowDeleted());
         request.setSingleEvents(query.isSingleEvents());
         
-        if (query.getTimeZone() != null) {
-            request.setTimeZone(query.getTimeZone());
-        }
+        // Always send the user's timezone to Google so it returns consistent results
+        request.setTimeZone(userTimezone.getId());
     }
     
     private List<CalendarEvent> applyAdditionalFiltering(List<CalendarEvent> events, EventQueryRequest query) {

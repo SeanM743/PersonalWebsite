@@ -148,25 +148,27 @@ public class EventMapper {
     }
     
     private void mapEventTimes(Event googleEvent, CalendarEvent.CalendarEventBuilder builder) {
-        // Handle start time
+        // Extract timezone first so we can use it for time conversion
+        ZoneId eventTimezone = DEFAULT_TIMEZONE;
         if (googleEvent.getStart() != null) {
-            LocalDateTime startTime = convertEventDateTime(googleEvent.getStart());
-            ZoneId timezone = extractTimezone(googleEvent.getStart());
-            
+            eventTimezone = extractTimezone(googleEvent.getStart());
+        }
+        builder.timezone(eventTimezone);
+        
+        // Handle start time — convert using the event's own timezone
+        if (googleEvent.getStart() != null) {
+            LocalDateTime startTime = convertEventDateTime(googleEvent.getStart(), eventTimezone);
             builder.startTime(startTime);
-            if (timezone != null) {
-                builder.timezone(timezone);
-            }
         }
         
         // Handle end time
         if (googleEvent.getEnd() != null) {
-            LocalDateTime endTime = convertEventDateTime(googleEvent.getEnd());
+            LocalDateTime endTime = convertEventDateTime(googleEvent.getEnd(), eventTimezone);
             builder.endTime(endTime);
         }
     }
     
-    private LocalDateTime convertEventDateTime(EventDateTime eventDateTime) {
+    private LocalDateTime convertEventDateTime(EventDateTime eventDateTime, ZoneId timezone) {
         if (eventDateTime == null) {
             return null;
         }
@@ -174,10 +176,10 @@ public class EventMapper {
         try {
             DateTime dateTime = eventDateTime.getDateTime();
             if (dateTime != null) {
-                // Event with specific time
+                // Event with specific time — convert to the event's own timezone
                 return LocalDateTime.ofInstant(
                         java.time.Instant.ofEpochMilli(dateTime.getValue()),
-                        DEFAULT_TIMEZONE
+                        timezone
                 );
             } else {
                 // All-day event
@@ -185,7 +187,7 @@ public class EventMapper {
                 if (date != null) {
                     return LocalDateTime.ofInstant(
                             java.time.Instant.ofEpochMilli(date.getValue()),
-                            DEFAULT_TIMEZONE
+                            timezone
                     ).toLocalDate().atStartOfDay();
                 }
             }

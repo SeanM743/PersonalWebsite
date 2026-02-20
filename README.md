@@ -98,6 +98,8 @@ npm install && npm run dev
 - **Performance calculations** with gain/loss metrics
 - **Market data caching** with intelligent refresh
 - **Portfolio composition** analysis and statistics
+- **Market Heat Map** visualization across 11 sectors
+- **Sandbox Portfolio** for paper trading and strategy testing
 
 ### 🤖 AI Chat Assistant
 - **Gemini AI integration** for natural language queries
@@ -270,11 +272,13 @@ With your Finnhub API key configured, you can immediately:
 3. **View performance metrics** and gain/loss calculations
 4. **Manage content** with posts and media tracking
 5. **Use the dashboard** for an overview of all data
-6. **Monitor service health** with Prometheus and Grafana
-7. **View real-time metrics** with WebSocket updates
-8. **Analyze performance** with comprehensive dashboards
-9. **Track cache and throttling** metrics
-10. **Export historical data** in CSV/JSON formats
+6. **Test strategies** in the Sandbox Portfolio without real money risk
+7. **Analyze the market** with the Market Heat Map visualization
+8. **Monitor service health** with Prometheus and Grafana
+9. **View real-time metrics** with WebSocket updates
+10. **Analyze performance** with comprehensive dashboards
+11. **Track cache and throttling** metrics
+12. **Export historical data** in CSV/JSON formats
 
 ## 🔮 Next Steps
 

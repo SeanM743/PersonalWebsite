@@ -198,7 +198,6 @@ public class NewsService {
         articleRepository.deleteById(articleId);
     }
 
-    @Transactional
     public void refreshNewsForUser(Long userId, boolean force) {
         List<NewsCategory> categories = categoryRepository.findByUserId(userId);
         for (NewsCategory category : categories) {
@@ -250,8 +249,12 @@ public class NewsService {
                     int savedCount = 0;
                     for (Map<String, Object> articleData : articles) {
                         if (savedCount >= MAX_ARTICLES_PER_CATEGORY) break;
-                        if (processSingleArticle(category, articleData)) {
-                            savedCount++;
+                        try {
+                            if (processSingleArticle(category, articleData)) {
+                                savedCount++;
+                            }
+                        } catch (Exception e) {
+                            log.error("Failed to save article for category " + category.getTopic(), e);
                         }
                     }
                 }

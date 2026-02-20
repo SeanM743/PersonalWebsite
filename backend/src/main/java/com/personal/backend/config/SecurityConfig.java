@@ -82,6 +82,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/signals/**").permitAll()
                 // Chat endpoints - allow guest access for dashboard chat
                 .requestMatchers("/api/chat/**").permitAll()
+                // Calendar read endpoints - public access for dashboard display
+                .requestMatchers("/api/calendar/**").permitAll()
                 // Admin-only endpoints (future use)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // All other endpoints require authentication
