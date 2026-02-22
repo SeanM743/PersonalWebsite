@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.time.Instant;
 import java.util.*;
 
@@ -31,10 +32,11 @@ public class PrometheusQueryService {
     @Cacheable(value = "prometheus-queries", key = "#query + '-' + #time")
     public Map<String, Object> queryInstant(String query, Long time) {
         try {
-            String url = UriComponentsBuilder.fromHttpUrl(prometheusUrl + "/api/v1/query")
+            URI url = UriComponentsBuilder.fromHttpUrl(prometheusUrl + "/api/v1/query")
                     .queryParam("query", query)
                     .queryParam("time", time != null ? time : Instant.now().getEpochSecond())
-                    .toUriString();
+                    .build()
+                    .toUri();
 
             log.debug("Executing Prometheus instant query: {}", query);
             
@@ -54,12 +56,13 @@ public class PrometheusQueryService {
     @Cacheable(value = "prometheus-range-queries", key = "#query + '-' + #start + '-' + #end + '-' + #step")
     public Map<String, Object> queryRange(String query, Long start, Long end, String step) {
         try {
-            String url = UriComponentsBuilder.fromHttpUrl(prometheusUrl + "/api/v1/query_range")
+            URI url = UriComponentsBuilder.fromHttpUrl(prometheusUrl + "/api/v1/query_range")
                     .queryParam("query", query)
                     .queryParam("start", start != null ? start : Instant.now().minusSeconds(3600).getEpochSecond())
                     .queryParam("end", end != null ? end : Instant.now().getEpochSecond())
                     .queryParam("step", step != null ? step : "15s")
-                    .toUriString();
+                    .build()
+                    .toUri();
 
             log.debug("Executing Prometheus range query: {}", query);
             
@@ -119,21 +122,29 @@ public class PrometheusQueryService {
                 return generateFallbackTimeSeries(metricName, start, end, step);
             }
             
-            List<Map<String, Object>> timeSeries = new ArrayList<>();
+            List<Map<String, Object>> timeSeriesData = new ArrayList<>();
             for (Map<String, Object> series : data) {
-                List<List<Object>> values = (List<List<Object>>) series.get("values");
-                Map<String, Object> metric = (Map<String, Object>) series.get("metric");
+                Map<String, Object> seriesMap = new HashMap<>();
+                seriesMap.put("metric", series.get("metric"));
                 
+                List<List<Object>> values = (List<List<Object>>) series.get("values");
+                List<Map<String, Object>> formattedValues = new ArrayList<>();
                 for (List<Object> value : values) {
                     Map<String, Object> point = new HashMap<>();
                     point.put("timestamp", ((Number) value.get(0)).longValue());
-                    point.put("value", Double.parseDouble(value.get(1).toString()));
-                    point.put("metric", metric);
-                    timeSeries.add(point);
+                    // The value might be a double or a string from Prometheus, so we need to parse it securely
+                    try {
+                        point.put("value", Double.parseDouble(value.get(1).toString()));
+                    } catch (NumberFormatException e) {
+                        point.put("value", 0.0);
+                    }
+                    formattedValues.add(point);
                 }
+                seriesMap.put("values", formattedValues);
+                timeSeriesData.add(seriesMap);
             }
             
-            return timeSeries;
+            return timeSeriesData;
         } catch (Exception e) {
             log.error("Error getting metric time series for: {}, returning simulated data", metricName, e);
             return generateFallbackTimeSeries(metricName, start, end, step);
@@ -180,6 +191,8 @@ public class PrometheusQueryService {
         
         Random random = new Random(metricName.hashCode()); // Deterministic for same metric
         
+        List<Map<String, Object>> formattedValues = new ArrayList<>();
+        
         for (long timestamp = startTime; timestamp <= endTime; timestamp += stepSeconds) {
             Map<String, Object> point = new HashMap<>();
             point.put("timestamp", timestamp);
@@ -194,9 +207,13 @@ public class PrometheusQueryService {
             value = Math.max(0, value);
             
             point.put("value", Math.round(value * 1000.0) / 1000.0); // Round to 3 decimal places
-            point.put("metric", metricLabels);
-            timeSeries.add(point);
+            formattedValues.add(point);
         }
+        
+        Map<String, Object> seriesMap = new HashMap<>();
+        seriesMap.put("metric", metricLabels);
+        seriesMap.put("values", formattedValues);
+        timeSeries.add(seriesMap);
         
         return timeSeries;
     }

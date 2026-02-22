@@ -578,6 +578,13 @@ class ApiService {
     const response = await this.api.post(`/news/refresh?force=${force}`);
     return response.data;
   }
+
+  // Weather Widget API
+  async getWeather(location?: string) {
+    const cacheKey = `weather-${location || 'default'}`;
+    const url = location ? `/weather?location=${encodeURIComponent(location)}` : '/weather';
+    return this.cachedGet(url, cacheKey, 15 * 60 * 1000); // Cache for 15 minutes in frontend
+  }
 }
 
 // Sports Service API (Python/FastAPI on port 8000)

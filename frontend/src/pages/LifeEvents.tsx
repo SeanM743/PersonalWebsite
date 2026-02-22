@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import BearsTracker from '../components/BearsTracker';
-import BerkeleyCountdown from '../components/BerkeleyCountdown';
-import NFLDraftCountdown from '../components/NFLDraftCountdown';
-import FamilyPulse from '../components/FamilyPulse';
-import DigitalGardenView from '../components/DigitalGardenView';
-import SportsStandings from '../components/SportsStandings';
-import BearsSeasonStats from '../components/BearsSeasonStats';
-import BearsRoster from '../components/BearsRoster';
+import BearsTracker from '../components/Sports/BearsTracker';
+import BerkeleyCountdown from '../components/Dashboard/BerkeleyCountdown';
+import NFLDraftCountdown from '../components/Sports/NFLDraftCountdown';
+import FamilyPulse from '../components/Dashboard/FamilyPulse';
+import DigitalGardenView from '../components/Garden/DigitalGardenView';
+import SportsStandings from '../components/Sports/SportsStandings';
+import BearsSeasonStats from '../components/Sports/BearsSeasonStats';
+import BearsRoster from '../components/Sports/BearsRoster';
 import TabNavigation from '../components/UI/TabNavigation';
 import {
     LayoutGrid,

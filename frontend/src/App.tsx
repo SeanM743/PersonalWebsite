@@ -15,6 +15,7 @@ import Chat from './pages/Chat';
 import LifeEvents from './pages/LifeEvents';
 import NewsPage from './pages/NewsPage';
 import NewsSettings from './pages/NewsSettings';
+import Monitoring from './pages/Monitoring';
 
 import SandboxDashboard from './components/Sandbox/SandboxDashboard';
 import SandboxPortfolioDetailComponent from './components/Sandbox/SandboxPortfolioDetail';
@@ -60,6 +61,7 @@ const AppContent: React.FC = () => {
           <Route path="/life-events" element={<LifeEvents />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/news/settings" element={<NewsSettings />} />
+          <Route path="/monitoring" element={<Monitoring />} />
           <Route path="/sandbox" element={<SandboxDashboard />} />
           <Route path="/sandbox/:id" element={<SandboxPortfolioDetailComponent />} />
 

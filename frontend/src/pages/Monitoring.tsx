@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, TrendingUp, Database, Zap, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Activity, TrendingUp, Database, Zap, AlertTriangle, CheckCircle, Server } from 'lucide-react';
 import ServiceHealthOverview from '../components/Monitoring/ServiceHealthOverview';
 import MetricsCharts from '../components/Monitoring/MetricsCharts';
 import ThrottlingMetrics from '../components/Monitoring/ThrottlingMetrics';
 import CacheMetrics from '../components/Monitoring/CacheMetrics';
 import AlertsPanel from '../components/Monitoring/AlertsPanel';
+import HostMetrics from '../components/Monitoring/HostMetrics';
 import { monitoringService } from '../services/monitoringService';
 import { useNotification } from '../contexts/NotificationContext';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 
 const Monitoring: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'throttling' | 'cache' | 'alerts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'host' | 'performance' | 'throttling' | 'cache' | 'alerts'>('overview');
   const [isLoading, setIsLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
   const { error } = useNotification();
@@ -70,6 +71,7 @@ const Monitoring: React.FC = () => {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
+    { id: 'host', label: 'Host Metrics', icon: Server },
     { id: 'performance', label: 'Performance', icon: TrendingUp },
     { id: 'throttling', label: 'Throttling', icon: Zap },
     { id: 'cache', label: 'Cache', icon: Database },
@@ -178,6 +180,7 @@ const Monitoring: React.FC = () => {
         {/* Tab Content */}
         <div className="space-y-6">
           {activeTab === 'overview' && <ServiceHealthOverview />}
+          {activeTab === 'host' && <HostMetrics />}
           {activeTab === 'performance' && <MetricsCharts />}
           {activeTab === 'throttling' && <ThrottlingMetrics />}
           {activeTab === 'cache' && <CacheMetrics />}

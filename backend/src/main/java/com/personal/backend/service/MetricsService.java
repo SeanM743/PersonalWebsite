@@ -208,6 +208,14 @@ public class MetricsService implements HealthIndicator {
         throttlingRate.reset();
     }
 
+    public long getTotalRequests() {
+        return totalRequests.get();
+    }
+
+    public long getThrottledRequests() {
+        return throttledRequests.get();
+    }
+
     /**
      * Health check implementation
      */

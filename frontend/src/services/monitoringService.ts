@@ -35,7 +35,7 @@ class MonitoringService {
         return;
       }
 
-      const socket = new SockJS(`${API_BASE_URL}/ws`);
+      const socket = new SockJS(`${API_BASE_URL}/ws/monitoring`);
       this.stompClient = new Client({
         webSocketFactory: () => socket as any,
         reconnectDelay: 5000,

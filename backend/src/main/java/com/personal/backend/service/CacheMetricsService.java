@@ -172,7 +172,9 @@ public class CacheMetricsService {
      * Get all cache names being monitored
      */
     public java.util.Set<String> getMonitoredCacheNames() {
-        return cacheMetrics.keySet();
+        java.util.Set<String> names = new java.util.HashSet<>(cacheMetrics.keySet());
+        names.addAll(cacheManager.getCacheNames());
+        return names;
     }
 
     /**
@@ -187,6 +189,25 @@ public class CacheMetricsService {
      * Get cache statistics summary
      */
     public CacheStatsSummary getCacheStatsSummary(String cacheName) {
+        // Try to get real stats from Caffeine's native recordStats
+        try {
+            org.springframework.cache.Cache springCache = cacheManager.getCache(cacheName);
+            if (springCache != null && springCache.getNativeCache() instanceof com.github.benmanes.caffeine.cache.Cache) {
+                com.github.benmanes.caffeine.cache.Cache<?, ?> caffeineCache =
+                    (com.github.benmanes.caffeine.cache.Cache<?, ?>) springCache.getNativeCache();
+                com.github.benmanes.caffeine.cache.stats.CacheStats stats = caffeineCache.stats();
+                long hits = stats.hitCount();
+                long misses = stats.missCount();
+                long total = hits + misses;
+                double hitRatio = total == 0 ? 0.0 : (double) hits / total;
+                long size = caffeineCache.estimatedSize();
+                return new CacheStatsSummary(cacheName, hits, misses, hitRatio, size);
+            }
+        } catch (Exception e) {
+            log.warn("Could not get Caffeine stats for cache: {}", cacheName, e);
+        }
+
+        // Fallback to counter-based metrics
         CacheOperationMetrics metrics = cacheMetrics.get(cacheName);
         if (metrics == null) {
             return new CacheStatsSummary(cacheName, 0, 0, 0.0, -1);

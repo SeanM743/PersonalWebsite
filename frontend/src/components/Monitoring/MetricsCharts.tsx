@@ -31,16 +31,34 @@ const MetricsCharts: React.FC = () => {
   const loadMetrics = async () => {
     try {
       setIsLoading(true);
-      
+
       const [responseTime, errorRate, requestRate] = await Promise.all([
         monitoringService.getResponseTimeTimeSeries(timeRange),
         monitoringService.getErrorRateTimeSeries(timeRange),
         monitoringService.getRequestRateTimeSeries(timeRange),
       ]);
 
-      if (responseTime.success) setResponseTimeData(responseTime.data || []);
-      if (errorRate.success) setErrorRateData(errorRate.data || []);
-      if (requestRate.success) setRequestRateData(requestRate.data || []);
+      if (responseTime.success) {
+        // Convert response time from seconds to milliseconds for display
+        const msData = (responseTime.data || []).map((series: any) => ({
+          ...series,
+          values: series.values.map((v: any) => ({ ...v, value: v.value * 1000 }))
+        }));
+        setResponseTimeData(msData);
+      }
+
+      if (errorRate.success) {
+        // Convert error rate from ratio to percentage for display
+        const pctData = (errorRate.data || []).map((series: any) => ({
+          ...series,
+          values: series.values.map((v: any) => ({ ...v, value: v.value * 100 }))
+        }));
+        setErrorRateData(pctData);
+      }
+
+      if (requestRate.success) {
+        setRequestRateData(requestRate.data || []);
+      }
     } catch (err: any) {
       error('Failed to load metrics', err.message);
     } finally {
@@ -130,25 +148,26 @@ const MetricsCharts: React.FC = () => {
 
           {/* Chart area */}
           <div className="ml-12 h-full border-l border-b border-gray-200 relative">
-            <svg className="w-full h-full" preserveAspectRatio="none">
+            <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
               <polyline
                 fill="none"
                 stroke={color}
                 strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
                 points={values.map((point, index) => {
                   const x = (index / (values.length - 1)) * 100;
                   const y = 100 - (((point.value - min) / range) * 100);
-                  return `${x}%,${y}%`;
+                  return `${x},${y}`;
                 }).join(' ')}
               />
-              <polyline
+              <polygon
                 fill={color}
                 fillOpacity="0.1"
                 stroke="none"
                 points={`0,100 ${values.map((point, index) => {
                   const x = (index / (values.length - 1)) * 100;
                   const y = 100 - (((point.value - min) / range) * 100);
-                  return `${x}%,${y}%`;
+                  return `${x},${y}`;
                 }).join(' ')} 100,100`}
               />
             </svg>
@@ -198,7 +217,7 @@ const MetricsCharts: React.FC = () => {
   const avgResponseTime = calculateAverage(responseTimeData);
   const avgErrorRate = calculateAverage(errorRateData);
   const avgRequestRate = calculateAverage(requestRateData);
-  
+
   const responseTrend = calculateTrend(responseTimeData);
   const errorTrend = calculateTrend(errorRateData);
   const requestTrend = calculateTrend(requestRateData);
@@ -232,9 +251,8 @@ const MetricsCharts: React.FC = () => {
               <Clock className="h-5 w-5 text-blue-600" />
               <h3 className="font-semibold text-gray-900">Response Time</h3>
             </div>
-            <div className={`flex items-center space-x-1 text-sm ${
-              responseTrend > 0 ? 'text-red-600' : 'text-green-600'
-            }`}>
+            <div className={`flex items-center space-x-1 text-sm ${responseTrend > 0 ? 'text-red-600' : 'text-green-600'
+              }`}>
               {responseTrend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span>{Math.abs(responseTrend).toFixed(1)}%</span>
             </div>
@@ -253,15 +271,14 @@ const MetricsCharts: React.FC = () => {
               <AlertTriangle className="h-5 w-5 text-red-600" />
               <h3 className="font-semibold text-gray-900">Error Rate</h3>
             </div>
-            <div className={`flex items-center space-x-1 text-sm ${
-              errorTrend > 0 ? 'text-red-600' : 'text-green-600'
-            }`}>
+            <div className={`flex items-center space-x-1 text-sm ${errorTrend > 0 ? 'text-red-600' : 'text-green-600'
+              }`}>
               {errorTrend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span>{Math.abs(errorTrend).toFixed(1)}%</span>
             </div>
           </div>
           <p className="text-3xl font-bold text-gray-900 mb-2">
-            {(avgErrorRate * 100).toFixed(2)}%
+            {avgErrorRate.toFixed(2)}%
           </p>
           <p className="text-sm text-gray-600 mb-4">Error percentage</p>
           {renderMiniChart(errorRateData, 'bg-red-500')}
@@ -274,9 +291,8 @@ const MetricsCharts: React.FC = () => {
               <Activity className="h-5 w-5 text-green-600" />
               <h3 className="font-semibold text-gray-900">Request Rate</h3>
             </div>
-            <div className={`flex items-center space-x-1 text-sm ${
-              requestTrend > 0 ? 'text-green-600' : 'text-red-600'
-            }`}>
+            <div className={`flex items-center space-x-1 text-sm ${requestTrend > 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
               {requestTrend > 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
               <span>{Math.abs(requestTrend).toFixed(1)}%</span>
             </div>

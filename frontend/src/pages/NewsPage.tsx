@@ -203,18 +203,19 @@ const NewsPage: React.FC = () => {
                                 className="group bg-card rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full"
                             >
                                 {/* Image & Topic Badge */}
-                                <div className="relative h-48 overflow-hidden shrink-0">
-                                    {article.imageUrl ? (
+                                <div className="relative h-48 overflow-hidden shrink-0 bg-muted/10 flex items-center justify-center">
+                                    <Newspaper className="absolute text-muted/30" size={64} />
+                                    {article.imageUrl && (
                                         <img
                                             src={article.imageUrl}
                                             alt={article.title}
-                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                            onError={(e) => { (e.target as HTMLImageElement).src = `https://source.unsplash.com/random/800x600?${article.topic}`; }}
+                                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 z-10"
+                                            onError={(e) => {
+                                                // Prevent infinite loop by hiding the broken image 
+                                                // and revealing the Newspaper icon behind it
+                                                (e.currentTarget as HTMLImageElement).style.opacity = '0';
+                                            }}
                                         />
-                                    ) : (
-                                        <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                                            <Newspaper className="text-gray-400" size={48} />
-                                        </div>
                                     )}
 
                                     <div className="absolute top-2 left-2 px-2 py-1 bg-black/60 backdrop-blur-md rounded text-[10px] font-bold text-white uppercase tracking-wider">

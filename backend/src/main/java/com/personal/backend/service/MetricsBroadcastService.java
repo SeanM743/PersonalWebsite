@@ -74,8 +74,12 @@ public class MetricsBroadcastService {
 
         try {
             Map<String, Object> throttlingData = new HashMap<>();
-            throttlingData.put("rate", metricsService.getCurrentThrottlingRate());
-            throttlingData.put("timestamp", System.currentTimeMillis());
+            throttlingData.put("throttlingRate", metricsService.getCurrentThrottlingRate() / 100.0);
+            throttlingData.put("totalRequests", metricsService.getTotalRequests());
+            throttlingData.put("throttledRequests", metricsService.getThrottledRequests());
+            throttlingData.put("byEndpoint", new HashMap<>());
+            throttlingData.put("timeWindow", "Since Startup");
+            throttlingData.put("timestamp", new Date().toString());
             
             messagingTemplate.convertAndSend("/topic/throttling", throttlingData);
             
@@ -103,11 +107,14 @@ public class MetricsBroadcastService {
                                 cacheMetricsService.getCacheStatsSummary(cacheName);
                         
                         Map<String, Object> cacheMap = new HashMap<>();
-                        cacheMap.put("name", stats.cacheName);
+                        cacheMap.put("cacheName", stats.cacheName);
                         cacheMap.put("hits", stats.hits);
                         cacheMap.put("misses", stats.misses);
                         cacheMap.put("hitRatio", stats.hitRatio);
                         cacheMap.put("size", stats.size);
+                        cacheMap.put("evictions", 0);
+                        cacheMap.put("maxSize", 1000);
+                        cacheMap.put("avgLoadTime", 0);
                         return cacheMap;
                     })
                     .collect(Collectors.toList());

@@ -3,9 +3,9 @@ import { apiService } from '../services/apiService';
 import { useNotification } from '../contexts/NotificationContext';
 import LoadingSpinner from '../components/UI/LoadingSpinner';
 import ErrorBoundary from '../components/ErrorBoundary';
-import NowSection from '../components/NowSection';
-import LifeLogView from '../components/LifeLogView';
-import Timeline from '../components/Timeline';
+import NowSection from '../components/Dashboard/NowSection';
+import LifeLogView from '../components/LifeLog/LifeLogView';
+import Timeline from '../components/Dashboard/Timeline';
 
 import {
   Heart,
@@ -15,7 +15,7 @@ import {
   ChevronRight,
   Plus
 } from 'lucide-react';
-import NewUpdateModal from '../components/NewUpdateModal';
+import NewUpdateModal from '../components/Content/NewUpdateModal';
 
 interface Post {
   id: number;

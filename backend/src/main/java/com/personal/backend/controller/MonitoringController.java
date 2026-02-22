@@ -142,9 +142,17 @@ public class MonitoringController {
     @GetMapping("/metrics/throttling")
     public ResponseEntity<Map<String, Object>> getThrottlingMetrics() {
         try {
+            Map<String, Object> data = new HashMap<>();
+            data.put("throttlingRate", metricsService.getCurrentThrottlingRate() / 100.0);
+            data.put("totalRequests", metricsService.getTotalRequests());
+            data.put("throttledRequests", metricsService.getThrottledRequests());
+            data.put("byEndpoint", new HashMap<>());
+            data.put("timeWindow", "Since Startup");
+            data.put("timestamp", new Date().toString());
+
             Map<String, Object> response = new HashMap<>();
-            response.put("currentRate", metricsService.getCurrentThrottlingRate());
-            response.put("timestamp", System.currentTimeMillis());
+            response.put("success", true);
+            response.put("data", data);
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
